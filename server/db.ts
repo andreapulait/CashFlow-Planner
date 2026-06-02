@@ -1116,8 +1116,13 @@ export async function getUserByOpenId(openId: string) {
 }
 
 export async function getUserByEmail(email: string) {
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result[0] || null;
+  try {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0] || null;
+  } catch (error: any) {
+    console.error('[DB] getUserByEmail REAL error:', error?.cause?.message ?? error?.message ?? String(error));
+    throw error;
+  }
 }
 
 export async function getUserByOAuthProvider(provider: string, providerId: string) {
