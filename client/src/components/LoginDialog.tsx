@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,13 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 
 interface LoginDialogProps {
   open: boolean;
@@ -20,252 +13,25 @@ interface LoginDialogProps {
 }
 
 export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
-  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
-  const [showPasswordReset, setShowPasswordReset] = useState(false);
-
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-
-  const [registerName, setRegisterName] = useState("");
-  const [registerEmail, setRegisterEmail] = useState("");
-  const [registerPassword, setRegisterPassword] = useState("");
-  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
-
-  const [resetEmail, setResetEmail] = useState("");
-
-  const loginMutation = trpc.auth.loginWithEmail.useMutation({
-    onSuccess: () => {
-      toast.success("Login effettuato con successo!");
-      onOpenChange(false);
-      window.location.reload();
-    },
-    onError: (error) => toast.error(error.message || "Errore durante il login"),
-  });
-
-  const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: () => {
-      toast.success("Registrazione completata! Benvenuto!");
-      onOpenChange(false);
-      window.location.reload();
-    },
-    onError: (error) => toast.error(error.message || "Errore durante la registrazione"),
-  });
-
-  const resetPasswordMutation = trpc.auth.requestPasswordReset.useMutation({
-    onSuccess: (data) => {
-      toast.success(data.message);
-      setShowPasswordReset(false);
-      setResetEmail("");
-    },
-    onError: (error) => toast.error(error.message || "Errore durante il reset password"),
-  });
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    loginMutation.mutate({ email: loginEmail, password: loginPassword });
-  };
-
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (registerPassword !== registerConfirmPassword) {
-      toast.error("Le password non coincidono");
-      return;
-    }
-    registerMutation.mutate({ email: registerEmail, password: registerPassword, name: registerName });
-  };
-
-  const handlePasswordReset = (e: React.FormEvent) => {
-    e.preventDefault();
-    resetPasswordMutation.mutate({ email: resetEmail });
-  };
-
-  // ── Password reset view ───────────────────────────────────────────────────
-  if (showPasswordReset) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Recupera Password</DialogTitle>
-            <DialogDescription>
-              Inserisci la tua email per ricevere il link di reset
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handlePasswordReset} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="reset-email">Email</Label>
-              <Input
-                id="reset-email"
-                type="email"
-                placeholder="tua@email.com"
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowPasswordReset(false)}>
-                Annulla
-              </Button>
-              <Button type="submit" className="flex-1" disabled={resetPasswordMutation.isPending}>
-                {resetPasswordMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Invia Link
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  // ── Main dialog ───────────────────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Accedi a Cash Flow Planner</DialogTitle>
-          <DialogDescription>Gestisci il tuo piano finanziario personale</DialogDescription>
+          <DialogDescription>
+            Gestisci il tuo piano finanziario personale
+          </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "register")}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">Accedi</TabsTrigger>
-            <TabsTrigger value="register">Registrati</TabsTrigger>
-          </TabsList>
-
-          {/* ── LOGIN ── */}
-          <TabsContent value="login" className="space-y-4">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="login-email">Email</Label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  placeholder="tua@email.com"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="login-password">Password</Label>
-                <Input
-                  id="login-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button
-                type="button"
-                variant="link"
-                className="px-0 text-sm"
-                onClick={() => setShowPasswordReset(true)}
-              >
-                Password dimenticata?
-              </Button>
-              <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-                {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Accedi
-              </Button>
-            </form>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Oppure continua con</span>
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => { window.location.href = "/api/oauth/google"; }}
-            >
-              <GoogleIcon />
-              Google
-            </Button>
-          </TabsContent>
-
-          {/* ── REGISTER ── */}
-          <TabsContent value="register" className="space-y-4">
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="register-name">Nome</Label>
-                <Input
-                  id="register-name"
-                  type="text"
-                  placeholder="Il tuo nome"
-                  value={registerName}
-                  onChange={(e) => setRegisterName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-email">Email</Label>
-                <Input
-                  id="register-email"
-                  type="email"
-                  placeholder="tua@email.com"
-                  value={registerEmail}
-                  onChange={(e) => setRegisterEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-password">Password</Label>
-                <Input
-                  id="register-password"
-                  type="password"
-                  placeholder="Minimo 8 caratteri"
-                  value={registerPassword}
-                  onChange={(e) => setRegisterPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-confirm-password">Conferma Password</Label>
-                <Input
-                  id="register-confirm-password"
-                  type="password"
-                  placeholder="Ripeti la password"
-                  value={registerConfirmPassword}
-                  onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
-                {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Registrati
-              </Button>
-            </form>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Oppure registrati con</span>
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => { window.location.href = "/api/oauth/google"; }}
-            >
-              <GoogleIcon />
-              Google
-            </Button>
-          </TabsContent>
-        </Tabs>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full mt-2"
+          onClick={() => { window.location.href = "/api/oauth/google"; }}
+        >
+          <GoogleIcon />
+          Continua con Google
+        </Button>
       </DialogContent>
     </Dialog>
   );
