@@ -139,7 +139,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2">Cash Flow Planner</h1>
           <p className="text-muted-foreground">
-            Gestisci i tuoi flussi di investimento e monitora il progresso verso l'obiettivo di 20.000€/mese
+            Gestisci i tuoi flussi di investimento e monitora il progresso verso l'obiettivo di {impostazioni ? formatCurrency(impostazioni.obiettivoMensile / 100) : "..."}/mese
           </p>
         </div>
 
@@ -160,7 +160,7 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Capitale Totale (Anno 5)</CardTitle>
+              <CardTitle className="text-sm font-medium">Capitale Totale ({impostazioni ? `Anno ${Math.round(impostazioni.orizzonteTemporale / 12)}` : "Anno 5"})</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -180,7 +180,7 @@ export default function Dashboard() {
               <div className="text-2xl font-bold">
                 {riepilogoLoading ? "..." : formatCurrency(riepilogo?.cashFlowMensile || 0)}
               </div>
-              <p className="text-xs text-muted-foreground">Rendita mensile al 5° anno</p>
+              <p className="text-xs text-muted-foreground">Rendita mensile al {impostazioni ? `${Math.round(impostazioni.orizzonteTemporale / 12)}° anno` : "5° anno"}</p>
             </CardContent>
           </Card>
 
