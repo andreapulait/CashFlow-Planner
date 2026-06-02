@@ -1,0 +1,9 @@
+{
+  "query": "DELETE a FROM affluenti a\nLEFT JOIN fiumi f ON a.fiumeId = f.id\nWHERE f.id IS NULL",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute DELETE a FROM affluenti a\nLEFT JOIN fiumi f ON a.fiumeId = f.id\nWHERE f.id IS NULL",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 68
+}

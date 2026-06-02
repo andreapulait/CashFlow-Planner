@@ -1,0 +1,66 @@
+{
+  "query": "SELECT id, nome, sorgente, rendimento, percentualeReinvestimento FROM fiumi LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT id, nome, sorgente, rendimento, percentualeReinvestimento FROM fiumi LIMIT 10",
+  "rows": [
+    {
+      "id": "150001",
+      "nome": "Dividendi",
+      "sorgente": "5000000",
+      "rendimento": "1000",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150002",
+      "nome": "Certificato",
+      "sorgente": "2000000",
+      "rendimento": "800",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150003",
+      "nome": "Liquidnow",
+      "sorgente": "3000000",
+      "rendimento": "5000",
+      "percentualeReinvestimento": "0"
+    },
+    {
+      "id": "150004",
+      "nome": "Supermirko",
+      "sorgente": "2000000",
+      "rendimento": "2000",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150005",
+      "nome": "Stacking",
+      "sorgente": "2000000",
+      "rendimento": "400",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150006",
+      "nome": "Bloody Sunday",
+      "sorgente": "1000000",
+      "rendimento": "2000",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150007",
+      "nome": "Oro",
+      "sorgente": "5000000",
+      "rendimento": "2000",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "180001",
+      "nome": "Esempio",
+      "sorgente": "5000000",
+      "rendimento": "1000",
+      "percentualeReinvestimento": "10"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\tsorgente\trendimento\tpercentualeReinvestimento\n150001\tDividendi\t5000000\t1000\tNULL\n150002\tCertificato\t2000000\t800\tNULL\n150003\tLiquidnow\t3000000\t5000\t0\n150004\tSupermirko\t2000000\t2000\tNULL\n150005\tStacking\t2000000\t400\tNULL\n150006\tBloody Sunday\t1000000\t2000\tNULL\n150007\tOro\t5000000\t2000\tNULL\n180001\tEsempio\t5000000\t1000\t10\n",
+  "stderr": "",
+  "execution_time_ms": 49
+}

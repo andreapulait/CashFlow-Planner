@@ -1,0 +1,20 @@
+{
+  "query": "SELECT * FROM impostazioni LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT * FROM impostazioni LIMIT 1;",
+  "rows": [
+    {
+      "id": "30001",
+      "userId": "1",
+      "obiettivoMensile": "2000000",
+      "orizzonteTemporale": "60",
+      "createdAt": "2025-11-28 16:18:29",
+      "updatedAt": "2026-01-01 15:40:25",
+      "dataInizio": "NULL",
+      "budgetMensileAffluenti": "500000"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tobiettivoMensile\torizzonteTemporale\tcreatedAt\tupdatedAt\tdataInizio\tbudgetMensileAffluenti\n30001\t1\t2000000\t60\t2025-11-28 16:18:29\t2026-01-01 15:40:25\tNULL\t500000\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

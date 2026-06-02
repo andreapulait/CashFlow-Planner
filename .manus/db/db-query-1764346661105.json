@@ -1,0 +1,19 @@
+{
+  "query": "SELECT \n  (SELECT COUNT(*) FROM fiumi) as fiumi_count,\n  (SELECT COUNT(*) FROM affluenti) as affluenti_count,\n  (SELECT COUNT(*) FROM reinvestimenti) as reinvestimenti_count,\n  (SELECT COUNT(*) FROM notifiche) as notifiche_count,\n  (SELECT COUNT(*) FROM alertConfig) as alertConfig_count,\n  (SELECT COUNT(*) FROM scenari) as scenari_count,\n  (SELECT COUNT(*) FROM scenarioSnapshots) as scenarioSnapshots_count;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT \n  (SELECT COUNT(*) FROM fiumi) as fiumi_count,\n  (SELECT COUNT(*) FROM affluenti) as affluenti_count,\n  (SELECT COUNT(*) FROM reinvestimenti) as reinvestimenti_count,\n  (SELECT COUNT(*) FROM notifiche) as notifiche_count,\n  (SELECT COUNT(*) FROM alertConfig) as alertConfig_count,\n  (SELECT COUNT(*) FROM scenari) as scenari_count,\n  (SELECT COUNT(*) FROM scenarioSnapshots) as scenarioSnapshots_count;",
+  "rows": [
+    {
+      "fiumi_count": "270",
+      "affluenti_count": "79",
+      "reinvestimenti_count": "66",
+      "notifiche_count": "0",
+      "alertConfig_count": "0",
+      "scenari_count": "0",
+      "scenarioSnapshots_count": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "fiumi_count\taffluenti_count\treinvestimenti_count\tnotifiche_count\talertConfig_count\tscenari_count\tscenarioSnapshots_count\n270\t79\t66\t0\t0\t0\t0\n",
+  "stderr": "",
+  "execution_time_ms": 485
+}

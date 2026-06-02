@@ -1,0 +1,18 @@
+{
+  "query": "SELECT a.id, a.mese, a.dataAffluente, a.importo, a.descrizione, f.nome as fiume\nFROM affluenti a\nJOIN fiumi f ON a.fiumeId = f.id\nWHERE f.nome = 'Gestito'\nORDER BY a.mese;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT a.id, a.mese, a.dataAffluente, a.importo, a.descrizione, f.nome as fiume\nFROM affluenti a\nJOIN fiumi f ON a.fiumeId = f.id\nWHERE f.nome = 'Gestito'\nORDER BY a.mese;",
+  "rows": [
+    {
+      "id": "210152",
+      "mese": "1",
+      "dataAffluente": "2026-06-30 22:00:00",
+      "importo": "500000",
+      "descrizione": "una tantum",
+      "fiume": "Gestito"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tmese\tdataAffluente\timporto\tdescrizione\tfiume\n210152\t1\t2026-06-30 22:00:00\t500000\tuna tantum\tGestito\n",
+  "stderr": "",
+  "execution_time_ms": 66
+}

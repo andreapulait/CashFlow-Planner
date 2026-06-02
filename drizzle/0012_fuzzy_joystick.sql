@@ -1,0 +1,1 @@
+ALTER TABLE `fiumi` MODIFY COLUMN `percentualeReinvestimento` int;

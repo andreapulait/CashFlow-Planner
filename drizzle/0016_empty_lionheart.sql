@@ -1,0 +1,1 @@
+ALTER TABLE `impostazioni` ADD `budgetMensileAffluenti` int;

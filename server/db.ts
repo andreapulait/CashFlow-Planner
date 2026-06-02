@@ -1,0 +1,1174 @@
+import { db } from "./db.config";
+import { 
+  fiumi, 
+  affluenti, 
+  reinvestimenti, 
+  impostazioni, 
+  notifiche, 
+  alertConfig, 
+  scenari, 
+  scenarioSnapshots,
+  users 
+} from "../drizzle/schema";
+import { eq, and, gte, lte, desc, asc, sql } from "drizzle-orm";
+import { dateToMonthOffset } from './dateUtils';
+
+// ============================================================================
+// IMPOSTAZIONI
+// ============================================================================
+
+export async function getImpostazioni() {
+  const result = await db.select().from(impostazioni).limit(1);
+  if (result.length === 0) {
+    // Create default settings
+    const defaultSettings = {
+      obiettivoMensile: 20000,
+      orizzonteTemporale: 60, // 5 years in months
+      budgetMensileAffluenti: 5000,
+      dataInizio: new Date('2026-01-01'),
+    };
+    await db.insert(impostazioni).values(defaultSettings);
+    return defaultSettings;
+  }
+  return result[0];
+}
+
+export async function getImpostazioniByUserId(userId: number) {
+  const result = await db.select().from(impostazioni).where(eq(impostazioni.userId, userId)).limit(1);
+  if (result.length === 0) {
+    // Create default settings for this user
+    const defaultSettings = {
+      userId,
+      obiettivoMensile: 2000000, // 20000 euro in cents
+      orizzonteTemporale: 60, // 5 years in months
+      budgetMensileAffluenti: 500000, // 5000 euro in cents
+      dataInizio: new Date('2026-01-01'),
+    };
+    await db.insert(impostazioni).values(defaultSettings);
+    // Retrieve the inserted record with auto-generated ID
+    const inserted = await db.select().from(impostazioni).where(eq(impostazioni.userId, userId)).limit(1);
+    return inserted[0];
+  }
+  return result[0];
+}
+
+export async function updateImpostazioni(params: {
+  obiettivoMensile?: number;
+  orizzonteTemporale?: number;
+  budgetMensileAffluenti?: number;
+  dataInizio?: Date;
+}) {
+  const current = await getImpostazioni();
+  const updated = { ...current, ...params };
+  await db.update(impostazioni).set(updated).where(eq(impostazioni.id, current.id));
+  return updated;
+}
+
+// ============================================================================
+// FIUMI
+// ============================================================================
+
+export async function getFiumi() {
+  return db.select().from(fiumi).orderBy(asc(fiumi.nome));
+}
+
+export async function getFiumiByUserId(userId: number) {
+  return db.select().from(fiumi).where(eq(fiumi.userId, userId)).orderBy(asc(fiumi.nome));
+}
+
+export async function getFiumeById(id: number) {
+  const result = await db.select().from(fiumi).where(eq(fiumi.id, id));
+  return result[0] || null;
+}
+
+export async function createFiume(params: {
+  userId: number;
+  nome: string;
+  sorgente: number;
+  rendimento: number;
+  meseCreazione: number;
+  dataCreazione?: Date | null;
+  percentualeReinvestimento?: number | null;
+}) {
+  const result = await db.insert(fiumi).values(params).returning({ id: fiumi.id });
+  return getFiumeById(result[0].id);
+}
+
+export async function updateFiume(
+  id: number,
+  userId: number,
+  params: {
+    nome?: string;
+    sorgente?: number;
+    rendimento?: number;
+    meseCreazione?: number;
+    dataCreazione?: Date | null;
+    percentualeReinvestimento?: number | null;
+  }
+) {
+  await db.update(fiumi).set(params).where(and(eq(fiumi.id, id), eq(fiumi.userId, userId)));
+  return getFiumeById(id);
+}
+
+export async function deleteFiume(id: number, userId: number) {
+  // Verify ownership first
+  const fiume = await db.select().from(fiumi).where(and(eq(fiumi.id, id), eq(fiumi.userId, userId))).limit(1);
+  if (fiume.length === 0) {
+    throw new Error('Fiume not found or unauthorized');
+  }
+  
+  // Delete related affluenti first
+  await db.delete(affluenti).where(eq(affluenti.fiumeId, id));
+  // Delete related reinvestimenti (both source and target)
+  await db.delete(reinvestimenti).where(eq(reinvestimenti.fiumeOrigineId, id));
+  await db.delete(reinvestimenti).where(eq(reinvestimenti.fiumeDestinazioneId, id));
+  // Delete fiume
+  await db.delete(fiumi).where(and(eq(fiumi.id, id), eq(fiumi.userId, userId)));
+  return { success: true };
+}
+
+// ============================================================================
+// AFFLUENTI
+// ============================================================================
+
+export async function getAffluenti(fiumeId?: number) {
+  if (fiumeId) {
+    return db
+      .select({
+        affluente: affluenti,
+        fiumeNome: fiumi.nome,
+      })
+      .from(affluenti)
+      .leftJoin(fiumi, eq(affluenti.fiumeId, fiumi.id))
+      .where(eq(affluenti.fiumeId, fiumeId))
+      .orderBy(asc(affluenti.mese));
+  }
+  return db
+    .select({
+      affluente: affluenti,
+      fiumeNome: fiumi.nome,
+    })
+    .from(affluenti)
+    .leftJoin(fiumi, eq(affluenti.fiumeId, fiumi.id))
+    .orderBy(asc(affluenti.mese));
+}
+
+export async function getAffluentiByFiumeId(fiumeId: number) {
+  return db.select().from(affluenti).where(eq(affluenti.fiumeId, fiumeId)).orderBy(asc(affluenti.mese));
+}
+
+export async function getAllAffluentiWithFiume(userId: number) {
+  const result = await db
+    .select({
+      affluente: affluenti,
+      fiumeNome: fiumi.nome,
+    })
+    .from(affluenti)
+    .leftJoin(fiumi, eq(affluenti.fiumeId, fiumi.id))
+    .where(eq(fiumi.userId, userId))
+    .orderBy(asc(affluenti.mese));
+  
+  return result.map(r => ({
+    ...r.affluente,
+    fiumeNome: r.fiumeNome,
+  }));
+}
+
+export async function createAffluente(params: {
+  fiumeId: number;
+  importo: number;
+  mese: number;
+  dataAffluente?: Date | null;
+  descrizione?: string | null;
+}) {
+  const result = await db.insert(affluenti).values({
+    ...params,
+    ricorrente: false,
+    periodicita: null,
+    durataMesi: null,
+    groupId: null,
+  }).returning({ id: affluenti.id });
+  const inserted = await db.select().from(affluenti).where(eq(affluenti.id, result[0].id)).limit(1);
+  return inserted[0];
+}
+
+export async function createAffluentiRicorrenti(params: {
+  fiumeId: number;
+  importo: number;
+  meseInizio: number;
+  dataAffluente?: Date | null;
+  descrizione?: string | null;
+  periodicita: number; // 1=monthly, 3=quarterly, 6=semestral, 12=annual
+  durataMesi: number; // duration in months
+}) {
+  console.log('[createAffluentiRicorrenti] Input params:', {
+    fiumeId: params.fiumeId,
+    importo: params.importo,
+    meseInizio: params.meseInizio,
+    dataAffluente: params.dataAffluente?.toISOString(),
+    periodicita: params.periodicita,
+    durataMesi: params.durataMesi
+  });
+  
+  const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const affluentiToCreate = [];
+  
+  // Calculate base date for the first affluente
+  let baseDate = params.dataAffluente || new Date();
+  
+  // First affluente should be at meseInizio + periodicita (not meseInizio itself)
+  // For example: if meseInizio=0 (Jan 2026) and periodicita=1, first affluente is at month 1 (Feb 2026)
+  let currentMese = params.meseInizio + params.periodicita;
+  
+  // Generate affluenti until we exceed meseInizio + durataMesi
+  for (let i = 1; currentMese < params.meseInizio + params.durataMesi; i++) {
+    // Calculate date for this affluente by adding months to base date
+    const currentDate = new Date(baseDate);
+    currentDate.setMonth(currentDate.getMonth() + (i * params.periodicita));
+    
+    affluentiToCreate.push({
+      fiumeId: params.fiumeId,
+      importo: params.importo,
+      mese: currentMese,
+      dataAffluente: currentDate,
+      descrizione: params.descrizione,
+      ricorrente: true,
+      periodicita: params.periodicita,
+      durataMesi: params.durataMesi,
+      groupId,
+    });
+    
+    currentMese += params.periodicita;
+  }
+  
+  if (affluentiToCreate.length > 0) {
+    await db.insert(affluenti).values(affluentiToCreate);
+  }
+  
+  return { count: affluentiToCreate.length, groupId };
+}
+
+export async function updateAffluente(
+  id: number,
+  params: {
+    importo?: number;
+    mese?: number;
+    dataAffluente?: Date | null;
+    descrizione?: string | null;
+  }
+) {
+  await db.update(affluenti).set(params).where(eq(affluenti.id, id));
+  const updated = await db.select().from(affluenti).where(eq(affluenti.id, id)).limit(1);
+  return updated[0];
+}
+
+export async function getAffluentiByGroupId(groupId: string) {
+  return db
+    .select()
+    .from(affluenti)
+    .where(eq(affluenti.groupId, groupId))
+    .orderBy(asc(affluenti.mese));
+}
+
+export async function updateAffluentiGroup(
+  groupId: string,
+  params: {
+    importo?: number;
+    descrizione?: string | null;
+    periodicita?: number;
+    durataMesi?: number;
+    dataInizio?: Date;
+  }
+) {
+  // Get all affluenti in the group
+  const groupAffluenti = await db
+    .select()
+    .from(affluenti)
+    .where(eq(affluenti.groupId, groupId))
+    .orderBy(asc(affluenti.mese));
+  
+  if (groupAffluenti.length === 0) {
+    throw new Error("Group not found");
+  }
+  
+  const firstAffluente = groupAffluenti[0];
+  
+  // If periodicita or durataMesi changed, we need to regenerate the group
+  if (params.periodicita !== undefined || params.durataMesi !== undefined) {
+    const newPeriodicita = params.periodicita ?? firstAffluente.periodicita ?? 1;
+    const newDurataMesi = params.durataMesi ?? firstAffluente.durataMesi ?? 12;
+    const newImporto = params.importo ?? firstAffluente.importo;
+    const newDescrizione = params.descrizione !== undefined ? params.descrizione : firstAffluente.descrizione;
+    
+    // Get fiume to retrieve correct dataCreazione
+    const fiume = await getFiumeById(firstAffluente.fiumeId);
+    if (!fiume) {
+      throw new Error("Fiume not found");
+    }
+    
+    // Delete old affluenti
+    await db.delete(affluenti).where(eq(affluenti.groupId, groupId));
+    
+    // Use provided dataInizio or first affluente's dataAffluente as starting point
+    const dataAffluente = params.dataInizio || firstAffluente.dataAffluente || fiume.dataCreazione || new Date('2026-01-01');
+    
+    // Calculate meseInizio from dataAffluente relative to impostazioni.dataInizio (NOT fiume.dataCreazione)
+    const settings = await getImpostazioni();
+    const pianoDataInizio = settings.dataInizio || new Date('2026-01-01');
+    const meseInizio = dateToMonthOffset(pianoDataInizio, dataAffluente);
+    
+    // Recalculate actual durataMesi: how many affluenti fit between meseInizio and end of plan
+    const orizzonteTemporale = settings.orizzonteTemporale || 60;
+    const mesiRimanenti = orizzonteTemporale - meseInizio;
+    const actualDurataMesi = Math.max(1, Math.min(newDurataMesi, mesiRimanenti));
+    
+    // Recreate with new parameters using the correct fiume.id
+    const result = await createAffluentiRicorrenti({
+      fiumeId: fiume.id,
+      importo: newImporto,
+      meseInizio,
+      dataAffluente,
+      descrizione: newDescrizione,
+      periodicita: newPeriodicita,
+      durataMesi: actualDurataMesi,
+    });
+    
+    return result;
+  } else {
+    // Just update importo and/or descrizione for all affluenti in group
+    const updateData: any = {};
+    if (params.importo !== undefined) updateData.importo = params.importo;
+    if (params.descrizione !== undefined) updateData.descrizione = params.descrizione;
+    
+    // Only update if there are values to set
+    if (Object.keys(updateData).length > 0) {
+      await db.update(affluenti).set(updateData).where(eq(affluenti.groupId, groupId));
+    }
+    
+    return { count: groupAffluenti.length, groupId };
+  }
+}
+
+export async function deleteAffluente(id: number) {
+  await db.delete(affluenti).where(eq(affluenti.id, id));
+  return { success: true };
+}
+
+export async function deleteAffluentiGroup(groupId: string) {
+  await db.delete(affluenti).where(eq(affluenti.groupId, groupId));
+  return { success: true };
+}
+
+/**
+ * Get monthly aggregated affluenti allocation for budget tracking
+ * 
+ * Logic:
+ * - Recurring affluenti: distribute monthly average (importo/periodicita) 
+ *   from (first_contribution_month - periodicita) to last_contribution_month
+ * - One-time affluenti: allocate full amount only in the specific month
+ * 
+ * Example:
+ * - Semestral 12,000€ starting July 2026 (month 6) ending July 2030 (month 54)
+ *   → allocate 2,000€/month from January 2026 (month 0) to July 2030 (month 54)
+ * - One-time 5,000€ in July 2026 (month 6)
+ *   → allocate 5,000€ ONLY in month 6
+ * - Result for July 2026: 2,000€ + 5,000€ = 7,000€ (140% of 5,000€ budget)
+ */
+export async function getAffluentiMensiliAggregati() {
+  const allAffluenti = await db.select().from(affluenti).orderBy(asc(affluenti.mese));
+  const settings = await getImpostazioni();
+  
+  // Initialize monthly totals object (not Map to avoid iteration issues)
+  const monthlyTotals: Record<number, number> = {};
+  
+  // Group affluenti by groupId for recurring processing
+  const groupMap: Record<string, typeof allAffluenti> = {};
+  const oneTimeAffluenti: typeof allAffluenti = [];
+  
+  for (const aff of allAffluenti) {
+    if (aff.ricorrente && aff.groupId) {
+      if (!groupMap[aff.groupId]) {
+        groupMap[aff.groupId] = [];
+      }
+      groupMap[aff.groupId].push(aff);
+    } else {
+      oneTimeAffluenti.push(aff);
+    }
+  }
+  
+  // Process recurring affluenti groups
+  for (const groupId in groupMap) {
+    const groupAffluenti = groupMap[groupId];
+    if (groupAffluenti.length === 0) continue;
+    
+    const firstAffluente = groupAffluenti[0];
+    const periodicita = firstAffluente.periodicita || 1;
+    const importo = firstAffluente.importo;
+    
+    if (periodicita > 1) {
+      // Find first and last deposit month
+      const mesi = groupAffluenti.map(a => a.mese);
+      const primoApporto = Math.min(...mesi);
+      const ultimoApporto = Math.max(...mesi);
+      
+      // Calculate monthly average
+      const importoMensile = importo / periodicita;
+      
+      // Distribute from (primoApporto - periodicita) to ultimoApporto
+      const meseInizio = primoApporto - periodicita;
+      const meseFine = ultimoApporto;
+      
+      for (let mese = meseInizio; mese <= meseFine; mese++) {
+        if (mese >= 0 && mese < settings.orizzonteTemporale) {
+          monthlyTotals[mese] = (monthlyTotals[mese] || 0) + importoMensile;
+        }
+      }
+    } else {
+      // Monthly recurring: allocate full amount in each month
+      for (const aff of groupAffluenti) {
+        if (aff.mese >= 0 && aff.mese < settings.orizzonteTemporale) {
+          monthlyTotals[aff.mese] = (monthlyTotals[aff.mese] || 0) + aff.importo;
+        }
+      }
+    }
+  }
+  
+  // Process one-time affluenti
+  for (const aff of oneTimeAffluenti) {
+    if (aff.mese >= 0 && aff.mese < settings.orizzonteTemporale) {
+      monthlyTotals[aff.mese] = (monthlyTotals[aff.mese] || 0) + aff.importo;
+    }
+  }
+  
+  // Convert to array format
+  const result = [];
+  for (let mese = 0; mese < settings.orizzonteTemporale; mese++) {
+    result.push({
+      mese,
+      totale: monthlyTotals[mese] || 0,
+    });
+  }
+  
+  return result;
+}
+
+// ============================================================================
+// REINVESTIMENTI
+// ============================================================================
+
+export async function getReinvestimenti() {
+  const result = await db
+    .select({
+      reinvestimento: reinvestimenti,
+      fiumeOrigineNome: sql<string>`fiume_origine.nome`,
+      fiumeDestinazioneNome: sql<string>`fiume_destinazione.nome`,
+    })
+    .from(reinvestimenti)
+    .leftJoin(
+      sql`${fiumi} as fiume_origine`,
+      eq(reinvestimenti.fiumeOrigineId, sql`fiume_origine.id`)
+    )
+    .leftJoin(
+      sql`${fiumi} as fiume_destinazione`,
+      eq(reinvestimenti.fiumeDestinazioneId, sql`fiume_destinazione.id`)
+    )
+    .orderBy(asc(reinvestimenti.meseReinvestimento));
+  
+  return result;
+}
+
+export async function getReinvestimentiByUserId(userId: number) {
+  // First get all fiumi IDs for this user
+  const userFiumi = await db
+    .select({ id: fiumi.id })
+    .from(fiumi)
+    .where(eq(fiumi.userId, userId));
+  
+  const fiumiIds = userFiumi.map(f => f.id);
+  
+  if (fiumiIds.length === 0) {
+    return [];
+  }
+  
+  // Then get reinvestimenti where fiumeOrigineId is in user's fiumi
+  const result = await db
+    .select({
+      reinvestimento: reinvestimenti,
+      fiumeOrigineNome: sql<string>`fiume_origine.nome`,
+      fiumeDestinazioneNome: sql<string>`fiume_destinazione.nome`,
+    })
+    .from(reinvestimenti)
+    .leftJoin(
+      sql`${fiumi} as fiume_origine`,
+      eq(reinvestimenti.fiumeOrigineId, sql`fiume_origine.id`)
+    )
+    .leftJoin(
+      sql`${fiumi} as fiume_destinazione`,
+      eq(reinvestimenti.fiumeDestinazioneId, sql`fiume_destinazione.id`)
+    )
+    .where(sql`${reinvestimenti.fiumeOrigineId} IN (${sql.join(fiumiIds.map(id => sql`${id}`), sql`, `)})`)
+    .orderBy(reinvestimenti.meseReinvestimento);
+  
+  return result;
+}
+
+export async function createReinvestimento(params: {
+  fiumeOrigineId: number;
+  fiumeDestinazioneId: number | null;
+  meseReinvestimento: number;
+  dataReinvestimento?: Date | null;
+  importoFisso?: number | null;
+  percentuale?: number | null;
+  nuovoFiumeNome?: string | null;
+  nuovoFiumeRendimento?: number | null;
+}) {
+  const result = await db.insert(reinvestimenti).values(params).returning({ id: reinvestimenti.id });
+  const inserted = await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, result[0].id)).limit(1);
+  return inserted[0];
+}
+
+export async function updateReinvestimento(
+  id: number,
+  params: {
+    fiumeOrigineId?: number;
+    fiumeDestinazioneId?: number | null;
+    meseReinvestimento?: number;
+    dataReinvestimento?: Date | null;
+    importoFisso?: number | null;
+    percentuale?: number | null;
+    nuovoFiumeNome?: string | null;
+    nuovoFiumeRendimento?: number | null;
+  }
+) {
+  await db.update(reinvestimenti).set(params).where(eq(reinvestimenti.id, id));
+  const updated = await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, id)).limit(1);
+  return updated[0];
+}
+
+export async function deleteReinvestimento(id: number) {
+  await db.delete(reinvestimenti).where(eq(reinvestimenti.id, id));
+  return { success: true };
+}
+
+// ============================================================================
+// SIMULAZIONE QUINQUENNALE
+// ============================================================================
+
+interface SimulazioneRiga {
+  mese: number;
+  fiumi: {
+    id: number;
+    nome: string;
+    valore: number;
+    rendita: number;
+    affluente: number;
+    reinvestimentoUscita: number;
+    reinvestimentoEntrata: number;
+  }[];
+  totaleValore: number;
+  totaleRendita: number;
+  totaleAffluente: number;
+  totaleReinvestimentoUscita: number;
+  totaleReinvestimentoEntrata: number;
+}
+
+export async function simulazioneQuinquennale() {
+  const settings = await getImpostazioni();
+  const allFiumi = await getFiumi();
+  const allAffluenti = await db.select().from(affluenti);
+  const allReinvestimenti = await getReinvestimenti();
+  
+  const risultati: SimulazioneRiga[] = [];
+  
+  // Initialize state for each fiume
+  const statoFiumi: Record<number, { valore: number; meseInizio: number }> = {};
+  for (const fiume of allFiumi) {
+    statoFiumi[fiume.id] = {
+      valore: fiume.sorgente,
+      meseInizio: fiume.meseInizio,
+    };
+  }
+  
+  // Simulate month by month
+  for (let mese = 0; mese < settings.orizzonteTemporale; mese++) {
+    const rigaMese: SimulazioneRiga = {
+      mese,
+      fiumi: [],
+      totaleValore: 0,
+      totaleRendita: 0,
+      totaleAffluente: 0,
+      totaleReinvestimentoUscita: 0,
+      totaleReinvestimentoEntrata: 0,
+    };
+    
+    // Process each fiume
+    for (const fiume of allFiumi) {
+      const stato = statoFiumi[fiume.id];
+      let valore = stato.valore;
+      let rendita = 0;
+      let affluente = 0;
+      let reinvestimentoUscita = 0;
+      let reinvestimentoEntrata = 0;
+      
+      // Only process if fiume has started
+      if (mese >= stato.meseInizio) {
+        // Apply monthly return
+        const rendimentoMensile = fiume.rendimento / 12 / 100;
+        rendita = valore * rendimentoMensile;
+        
+        // Apply affluenti for this month
+        const affluentiMese = allAffluenti.filter(
+          (a) => a.fiumeId === fiume.id && a.mese === mese
+        );
+        affluente = affluentiMese.reduce((sum, a) => sum + a.importo, 0);
+        
+        // Apply reinvestimenti OUT (this fiume is source)
+        const reinvestimentiOut = allReinvestimenti.filter(
+          (r) => r.reinvestimento.fiumeOrigineId === fiume.id && r.reinvestimento.meseReinvestimento === mese
+        );
+        for (const r of reinvestimentiOut) {
+          if (r.reinvestimento.importoFisso) {
+            reinvestimentoUscita += r.reinvestimento.importoFisso;
+          } else if (r.reinvestimento.percentuale) {
+            reinvestimentoUscita += valore * (r.reinvestimento.percentuale / 100);
+          }
+        }
+        
+        // Apply reinvestimenti IN (this fiume is destination)
+        const reinvestimentiIn = allReinvestimenti.filter(
+          (r) => r.reinvestimento.fiumeDestinazioneId === fiume.id && r.reinvestimento.meseReinvestimento === mese
+        );
+        for (const r of reinvestimentiIn) {
+          const origineId = r.reinvestimento.fiumeOrigineId;
+          const statoOrigine = statoFiumi[origineId];
+          if (r.reinvestimento.importoFisso) {
+            reinvestimentoEntrata += r.reinvestimento.importoFisso;
+          } else if (r.reinvestimento.percentuale) {
+            reinvestimentoEntrata += statoOrigine.valore * (r.reinvestimento.percentuale / 100);
+          }
+        }
+        
+        // Calculate reinvestment of rendita based on percentualeReinvestimento
+        const percentualeReinvestimento = fiume.percentualeReinvestimento ?? 100;
+        const renditaReinvestita = rendita * (percentualeReinvestimento / 100);
+        const renditaPrelevata = rendita * ((100 - percentualeReinvestimento) / 100);
+        
+        // Update value: add rendita reinvestita, affluente, reinvestimenti
+        valore = valore + renditaReinvestita + affluente - reinvestimentoUscita + reinvestimentoEntrata;
+        
+        // Rendita shown is the amount withdrawn (not reinvested)
+        rendita = renditaPrelevata;
+      }
+      
+      // Update state for next month
+      statoFiumi[fiume.id].valore = valore;
+      
+      // Add to results
+      rigaMese.fiumi.push({
+        id: fiume.id,
+        nome: fiume.nome,
+        valore,
+        rendita,
+        affluente,
+        reinvestimentoUscita,
+        reinvestimentoEntrata,
+      });
+      
+      rigaMese.totaleValore += valore;
+      rigaMese.totaleRendita += rendita;
+      rigaMese.totaleAffluente += affluente;
+      rigaMese.totaleReinvestimentoUscita += reinvestimentoUscita;
+      rigaMese.totaleReinvestimentoEntrata += reinvestimentoEntrata;
+    }
+    
+    risultati.push(rigaMese);
+  }
+  
+  return risultati;
+}
+
+// ============================================================================
+// ANALYTICS
+// ============================================================================
+
+export async function getEvoluzionePatrimonio() {
+  const settings = await getImpostazioni();
+  const allFiumi = await getFiumi();
+  const allAffluenti = await db.select().from(affluenti);
+  
+  const risultati = [];
+  
+  // Initialize state for each fiume
+  const statoFiumi: Record<number, { valore: number; meseInizio: number }> = {};
+  for (const fiume of allFiumi) {
+    statoFiumi[fiume.id] = {
+      valore: fiume.sorgente,
+      meseInizio: fiume.meseInizio,
+    };
+  }
+  
+  // Simulate month by month
+  for (let mese = 0; mese < settings.orizzonteTemporale; mese++) {
+    let valoreTotale = 0;
+    let renditaMensile = 0;
+    let affluentiMese = 0;
+    
+    for (const fiume of allFiumi) {
+      const stato = statoFiumi[fiume.id];
+      let valore = stato.valore;
+      
+      if (mese >= stato.meseInizio) {
+        // Apply monthly return
+        const rendimentoMensile = fiume.rendimento / 12 / 100;
+        const rendita = valore * rendimentoMensile;
+        renditaMensile += rendita;
+        
+        // Apply affluenti
+        const affluentiDelMese = allAffluenti.filter(
+          (a) => a.fiumeId === fiume.id && a.mese === mese
+        );
+        const totaleAffluenti = affluentiDelMese.reduce((sum, a) => sum + a.importo, 0);
+        affluentiMese += totaleAffluenti;
+        
+        // Calculate reinvestment based on percentualeReinvestimento
+        const percentualeReinvestimento = fiume.percentualeReinvestimento ?? 100;
+        const renditaReinvestita = rendita * (percentualeReinvestimento / 100);
+        
+        // Update value
+        valore = valore + renditaReinvestita + totaleAffluenti;
+      }
+      
+      statoFiumi[fiume.id].valore = valore;
+      valoreTotale += valore;
+    }
+    
+    risultati.push({
+      mese,
+      valoreTotale,
+      renditaMensile,
+      affluentiMese,
+    });
+  }
+  
+  return risultati;
+}
+
+export async function getPerformanceComparativa() {
+  const settings = await getImpostazioni();
+  const allFiumi = await getFiumi();
+  const allAffluenti = await db.select().from(affluenti);
+  
+  const risultati = [];
+  
+  for (const fiume of allFiumi) {
+    let valore = fiume.sorgente;
+    const totaleAffluenti = allAffluenti
+      .filter((a) => a.fiumeId === fiume.id)
+      .reduce((sum, a) => sum + a.importo, 0);
+    
+    // Simulate to end of horizon
+    for (let mese = fiume.meseInizio; mese < settings.orizzonteTemporale; mese++) {
+      const rendimentoMensile = fiume.rendimento / 12 / 100;
+      const rendita = valore * rendimentoMensile;
+      
+      const affluentiMese = allAffluenti.filter(
+        (a) => a.fiumeId === fiume.id && a.mese === mese
+      );
+      const totaleAffluenteMese = affluentiMese.reduce((sum, a) => sum + a.importo, 0);
+      
+      // Calculate reinvestment based on percentualeReinvestimento
+      const percentualeReinvestimento = fiume.percentualeReinvestimento ?? 100;
+      const renditaReinvestita = rendita * (percentualeReinvestimento / 100);
+      
+      valore = valore + renditaReinvestita + totaleAffluenteMese;
+    }
+    
+    const valoreIniziale = fiume.sorgente + totaleAffluenti;
+    const valoreFinale = valore;
+    const guadagno = valoreFinale - valoreIniziale;
+    const roi = valoreIniziale > 0 ? (guadagno / valoreIniziale) * 100 : 0;
+    
+    risultati.push({
+      fiumeId: fiume.id,
+      nome: fiume.nome,
+      valoreIniziale,
+      valoreFinale,
+      guadagno,
+      roi,
+    });
+  }
+  
+  return risultati.sort((a, b) => b.roi - a.roi);
+}
+
+// ============================================================================
+// NOTIFICHE
+// ============================================================================
+
+export async function getNotifiche() {
+  return db.select().from(notifiche).orderBy(desc(notifiche.createdAt));
+}
+
+export async function markNotificaAsRead(id: number) {
+  await db.update(notifiche).set({ letta: true }).where(eq(notifiche.id, id));
+  return { success: true };
+}
+
+export async function markAllNotificheAsRead() {
+  await db.update(notifiche).set({ letta: true });
+  return { success: true };
+}
+
+export async function deleteNotifica(id: number) {
+  await db.delete(notifiche).where(eq(notifiche.id, id));
+  return { success: true };
+}
+
+export async function createNotifica(params: {
+  tipo: "info" | "warning" | "success" | "error";
+  titolo: string;
+  messaggio: string;
+  priorita?: "bassa" | "media" | "alta";
+  dataAlert?: Date | null;
+  affluenteId?: number | null;
+}) {
+  const result = await db.insert(notifiche).values({
+    ...params,
+    letta: 0,
+    priorita: params.priorita || "medium",
+  }).returning({ id: notifiche.id });
+  const inserted = await db.select().from(notifiche).where(eq(notifiche.id, result[0].id)).limit(1);
+  return inserted[0];
+}
+
+// ============================================================================
+// ALERT CONFIG
+// ============================================================================
+
+export async function getAlertConfig() {
+  return db.select().from(alertConfig).orderBy(asc(alertConfig.createdAt));
+}
+
+export async function createAlertConfig(params: {
+  tipoAlert: "soglia_roi" | "traguardo_valore" | "soglia_rendita";
+  soglia: number;
+  operatore: "maggiore" | "minore" | "uguale";
+  fiumeId?: number | null;
+  attivo?: boolean;
+}) {
+  const result = await db.insert(alertConfig).values({
+    ...params,
+    attivo: params.attivo ?? 1,
+  }).returning({ id: alertConfig.id });
+  const inserted = await db.select().from(alertConfig).where(eq(alertConfig.id, result[0].id)).limit(1);
+  return inserted[0];
+}
+
+export async function updateAlertConfig(
+  id: number,
+  params: {
+    soglia?: number;
+    operatore?: "maggiore" | "minore" | "uguale";
+    fiumeId?: number | null;
+    attivo?: boolean;
+  }
+) {
+  await db.update(alertConfig).set(params).where(eq(alertConfig.id, id));
+  const updated = await db.select().from(alertConfig).where(eq(alertConfig.id, id)).limit(1);
+  return updated[0];
+}
+
+export async function toggleAlertConfig(id: number) {
+  const current = await db.select().from(alertConfig).where(eq(alertConfig.id, id));
+  if (current.length === 0) throw new Error("Alert not found");
+  
+  const newAttivo = !current[0].attivo;
+  await db.update(alertConfig).set({ attivo: newAttivo }).where(eq(alertConfig.id, id));
+  return { attivo: newAttivo };
+}
+
+export async function deleteAlertConfig(id: number) {
+  await db.delete(alertConfig).where(eq(alertConfig.id, id));
+  return { success: true };
+}
+
+export async function createAlertAutomatico(params: {
+  affluenteId: number;
+  giorniPreavviso: number;
+}) {
+  const affluente = await db.select().from(affluenti).where(eq(affluenti.id, params.affluenteId));
+  if (affluente.length === 0) throw new Error("Affluente not found");
+  
+  const aff = affluente[0];
+  if (!aff.dataAffluente) throw new Error("Affluente has no date");
+  
+  const dataAlert = new Date(aff.dataAffluente);
+  dataAlert.setDate(dataAlert.getDate() - params.giorniPreavviso);
+  
+  const fiume = await getFiumeById(aff.fiumeId);
+  const fiumeNome = fiume?.nome || "Fiume";
+  
+  return createNotifica({
+    tipo: "info",
+    titolo: `Promemoria Affluente: ${fiumeNome}`,
+    messaggio: `Affluente di ${aff.importo.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} programmato per ${aff.dataAffluente.toLocaleDateString('it-IT')}`,
+    priorita: "media",
+    dataAlert,
+    affluenteId: aff.id,
+  });
+}
+
+export async function createAlertGruppo(params: {
+  groupId: string;
+  giorniPreavviso: number;
+}) {
+  const groupAffluenti = await db
+    .select()
+    .from(affluenti)
+    .where(eq(affluenti.groupId, params.groupId))
+    .orderBy(asc(affluenti.mese));
+  
+  if (groupAffluenti.length === 0) throw new Error("Group not found");
+  
+  const fiume = await getFiumeById(groupAffluenti[0].fiumeId);
+  const fiumeNome = fiume?.nome || "Fiume";
+  
+  let createdCount = 0;
+  const now = new Date();
+  
+  for (const aff of groupAffluenti) {
+    if (!aff.dataAffluente) continue;
+    
+    // Skip past affluenti
+    if (aff.dataAffluente < now) continue;
+    
+    // Check if alert already exists for this affluente
+    const existingAlert = await db
+      .select()
+      .from(notifiche)
+      .where(eq(notifiche.affluenteId, aff.id));
+    
+    if (existingAlert.length > 0) continue;
+    
+    const dataAlert = new Date(aff.dataAffluente);
+    dataAlert.setDate(dataAlert.getDate() - params.giorniPreavviso);
+    
+    await createNotifica({
+      tipo: "info",
+      titolo: `Promemoria Affluente: ${fiumeNome}`,
+      messaggio: `Affluente di ${aff.importo.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} programmato per ${aff.dataAffluente.toLocaleDateString('it-IT')}`,
+      priorita: "media",
+      dataAlert,
+      affluenteId: aff.id,
+    });
+    
+    createdCount++;
+  }
+  
+  return { count: createdCount };
+}
+
+// ============================================================================
+// SCENARI
+// ============================================================================
+
+export async function getScenari() {
+  return db.select().from(scenari).orderBy(desc(scenari.createdAt));
+}
+
+export async function getScenariByUserId(userId: number) {
+  return db.select().from(scenari).where(eq(scenari.userId, userId)).orderBy(desc(scenari.createdAt));
+}
+
+export async function createScenario(params: {
+  nome: string;
+  descrizione?: string | null;
+}) {
+  const result = await db.insert(scenari).values(params).returning({ id: scenari.id });
+  const inserted = await db.select().from(scenari).where(eq(scenari.id, result[0].id)).limit(1);
+  return inserted[0];
+}
+
+export async function deleteScenario(id: number) {
+  // Delete related snapshots
+  await db.delete(scenarioSnapshots).where(eq(scenarioSnapshots.scenarioId, id));
+  // Delete scenario
+  await db.delete(scenari).where(eq(scenari.id, id));
+  return { success: true };
+}
+
+export async function saveScenarioSnapshot(scenarioId: number) {
+  const allFiumi = await getFiumi();
+  const allAffluenti = await getAffluenti();
+  const allReinvestimenti = await getReinvestimenti();
+  const settings = await getImpostazioni();
+  
+  const snapshot = {
+    fiumi: allFiumi,
+    affluenti: allAffluenti.map(a => a.affluente),
+    reinvestimenti: allReinvestimenti.map(r => r.reinvestimento),
+    impostazioni: settings,
+  };
+  
+  const result = await db.insert(scenarioSnapshots).values({
+    scenarioId,
+    snapshotData: JSON.stringify(snapshot),
+  }).returning({ id: scenarioSnapshots.id });
+  const inserted = await db.select().from(scenarioSnapshots).where(eq(scenarioSnapshots.id, result[0].id)).limit(1);
+  return inserted[0];
+}
+
+export async function getScenarioSnapshots(scenarioId: number) {
+  return db.select().from(scenarioSnapshots).where(eq(scenarioSnapshots.scenarioId, scenarioId)).orderBy(desc(scenarioSnapshots.createdAt));
+}
+
+// ============================================================================
+// DATA MANAGEMENT (Import/Export)
+// ============================================================================
+
+export async function exportAllData() {
+  const allFiumi = await getFiumi();
+  const allAffluenti = await getAffluenti();
+  const allReinvestimenti = await getReinvestimenti();
+  const settings = await getImpostazioni();
+  
+  return {
+    version: "1.0",
+    exportDate: new Date().toISOString(),
+    data: {
+      fiumi: allFiumi,
+      affluenti: allAffluenti.map(a => a.affluente),
+      reinvestimenti: allReinvestimenti.map(r => r.reinvestimento),
+      impostazioni: settings,
+    },
+  };
+}
+
+export async function importData(data: any) {
+  if (data.version !== "1.0") {
+    throw new Error("Unsupported data version");
+  }
+  
+  const { fiumi: importFiumi, affluenti: importAffluenti, reinvestimenti: importReinvestimenti, impostazioni: importImpostazioni } = data.data;
+  
+  // Map old fiume IDs to new fiume IDs
+  const fiumeIdMap: Record<number, number> = {};
+  
+  // Import fiumi
+  for (const fiume of importFiumi) {
+    const { id, createdAt, updatedAt, ...fiumeData } = fiume;
+    const newFiume = await createFiume(fiumeData);
+    fiumeIdMap[id] = newFiume.id;
+  }
+  
+  // Import affluenti
+  for (const affluente of importAffluenti) {
+    const { id, createdAt, updatedAt, fiumeId, ...affluenteData } = affluente;
+    const newFiumeId = fiumeIdMap[fiumeId];
+    if (newFiumeId) {
+      await db.insert(affluenti).values({
+        ...affluenteData,
+        fiumeId: newFiumeId,
+      });
+    }
+  }
+  
+  // Import reinvestimenti
+  for (const reinvestimento of importReinvestimenti) {
+    const { id, createdAt, updatedAt, fiumeOrigineId, fiumeDestinazioneId, ...reinvestimentoData } = reinvestimento;
+    const newOrigineId = fiumeIdMap[fiumeOrigineId];
+    const newDestinazioneId = fiumeDestinazioneId ? fiumeIdMap[fiumeDestinazioneId] : null;
+    if (newOrigineId) {
+      await db.insert(reinvestimenti).values({
+        ...reinvestimentoData,
+        fiumeOrigineId: newOrigineId,
+        fiumeDestinazioneId: newDestinazioneId,
+      });
+    }
+  }
+  
+  // Import impostazioni (merge with existing)
+  if (importImpostazioni) {
+    const { id, ...impostazioniData } = importImpostazioni;
+    await updateImpostazioni(impostazioniData);
+  }
+  
+  return { success: true };
+}
+
+// ============================================================================
+// USER MANAGEMENT
+// ============================================================================
+
+export async function getDb() {
+  return db;
+}
+
+export async function getUserById(id: number) {
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function getUserByOpenId(openId: string) {
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result[0] || null;
+}
+
+export async function getUserByEmail(email: string) {
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result[0] || null;
+}
+
+export async function getUserByOAuthProvider(provider: string, providerId: string) {
+  const result = await db.select().from(users)
+    .where(eq(users.authProvider, provider))
+    .where(eq(users.oauthProviderId, providerId))
+    .limit(1);
+  return result[0] || null;
+}
+
+export async function upsertUser(userData: {
+  openId?: string | null;
+  name?: string | null;
+  email?: string | null;
+  passwordHash?: string | null;
+  authProvider?: string;
+  oauthProviderId?: string | null;
+  loginMethod?: string | null;
+  lastSignedIn?: Date;
+}) {
+  // Check if user exists by openId or email
+  let existingUser = null;
+  
+  if (userData.openId) {
+    existingUser = await getUserByOpenId(userData.openId);
+  } else if (userData.email) {
+    existingUser = await getUserByEmail(userData.email);
+  }
+  
+  if (existingUser) {
+    // Update existing user
+    await db.update(users)
+      .set({
+        ...userData,
+        updatedAt: new Date(),
+        lastSignedIn: userData.lastSignedIn || new Date(),
+      })
+      .where(eq(users.id, existingUser.id));
+    return getUserById(existingUser.id);
+  } else {
+    // Create new user
+    const result = await db.insert(users).values({
+      ...userData,
+      authProvider: userData.authProvider || 'email',
+      lastSignedIn: userData.lastSignedIn || new Date(),
+    }).returning({ id: users.id });
+    return getUserById(result[0].id);
+  }
+}
+
+export async function updateUserLastSignedIn(id: number) {
+  await db.update(users)
+    .set({ lastSignedIn: new Date(), updatedAt: new Date() })
+    .where(eq(users.id, id));
+}

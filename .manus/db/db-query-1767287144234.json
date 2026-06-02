@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE affluenti \nSET mese = 6 \nWHERE mese = 2 AND fiumeId = (SELECT id FROM fiumi WHERE nome = 'Gestito');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute UPDATE affluenti \nSET mese = 6 \nWHERE mese = 2 AND fiumeId = (SELECT id FROM fiumi WHERE nome = 'Gestito');",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 72
+}

@@ -1,0 +1,13 @@
+{
+  "query": "SELECT id FROM users WHERE email = 'andrea.pula.it' OR name = 'andrea.pula.it'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT id FROM users WHERE email = 'andrea.pula.it' OR name = 'andrea.pula.it'",
+  "rows": [
+    {
+      "id": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\n1\n",
+  "stderr": "",
+  "execution_time_ms": 49
+}

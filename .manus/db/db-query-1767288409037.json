@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, fiumeId, mese, importo, periodicita, descrizione FROM affluenti WHERE descrizione LIKE '%una tantum%' LIMIT 5",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT id, fiumeId, mese, importo, periodicita, descrizione FROM affluenti WHERE descrizione LIKE '%una tantum%' LIMIT 5",
+  "rows": [
+    {
+      "id": "210152",
+      "fiumeId": "240001",
+      "mese": "6",
+      "importo": "500000",
+      "periodicita": "NULL",
+      "descrizione": "una tantum"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfiumeId\tmese\timporto\tperiodicita\tdescrizione\n210152\t240001\t6\t500000\tNULL\tuna tantum\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

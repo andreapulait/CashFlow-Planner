@@ -1,0 +1,15 @@
+{
+  "query": "SELECT \n  (SELECT COUNT(*) FROM affluenti) as affluenti_count,\n  (SELECT COUNT(*) FROM reinvestimenti) as reinvestimenti_count,\n  (SELECT COUNT(*) FROM fiumi) as fiumi_count;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT \n  (SELECT COUNT(*) FROM affluenti) as affluenti_count,\n  (SELECT COUNT(*) FROM reinvestimenti) as reinvestimenti_count,\n  (SELECT COUNT(*) FROM fiumi) as fiumi_count;",
+  "rows": [
+    {
+      "affluenti_count": "4",
+      "reinvestimenti_count": "2",
+      "fiumi_count": "7"
+    }
+  ],
+  "messages": [],
+  "stdout": "affluenti_count\treinvestimenti_count\tfiumi_count\n4\t2\t7\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

@@ -1,0 +1,60 @@
+{
+  "query": "SELECT id, nome, percentualeReinvestimento FROM fiumi LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT id, nome, percentualeReinvestimento FROM fiumi LIMIT 10",
+  "rows": [
+    {
+      "id": "150001",
+      "nome": "Dividendi",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150002",
+      "nome": "Certificato",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150003",
+      "nome": "Liquidnow",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150004",
+      "nome": "Supermirko",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150005",
+      "nome": "Stacking",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150006",
+      "nome": "Bloody Sunday",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150007",
+      "nome": "Oro",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150031",
+      "nome": "Test 0% Reinv",
+      "percentualeReinvestimento": "50"
+    },
+    {
+      "id": "150032",
+      "nome": "Test 0% Reinv 1764348708611",
+      "percentualeReinvestimento": "NULL"
+    },
+    {
+      "id": "150033",
+      "nome": "Test 50% Reinv 1764348708730",
+      "percentualeReinvestimento": "50"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\tpercentualeReinvestimento\n150001\tDividendi\tNULL\n150002\tCertificato\tNULL\n150003\tLiquidnow\tNULL\n150004\tSupermirko\tNULL\n150005\tStacking\tNULL\n150006\tBloody Sunday\tNULL\n150007\tOro\tNULL\n150031\tTest 0% Reinv\t50\n150032\tTest 0% Reinv 1764348708611\tNULL\n150033\tTest 50% Reinv 1764348708730\t50\n",
+  "stderr": "",
+  "execution_time_ms": 48
+}

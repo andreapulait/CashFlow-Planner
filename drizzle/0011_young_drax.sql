@@ -1,0 +1,1 @@
+ALTER TABLE `fiumi` ADD `percentualeReinvestimento` int DEFAULT 0 NOT NULL;

@@ -1,0 +1,9 @@
+{
+  "query": "DELETE FROM reinvestimenti WHERE id = (SELECT id FROM (SELECT id FROM reinvestimenti ORDER BY id DESC LIMIT 1) AS temp)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute DELETE FROM reinvestimenti WHERE id = (SELECT id FROM (SELECT id FROM reinvestimenti ORDER BY id DESC LIMIT 1) AS temp)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 64
+}

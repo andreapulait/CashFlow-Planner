@@ -1,0 +1,60 @@
+{
+  "query": "SELECT mese, dataAffluente, importo FROM affluenti WHERE groupId IS NOT NULL ORDER BY mese",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT mese, dataAffluente, importo FROM affluenti WHERE groupId IS NOT NULL ORDER BY mese",
+  "rows": [
+    {
+      "mese": "7",
+      "dataAffluente": "2026-07-01 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "13",
+      "dataAffluente": "2026-12-31 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "19",
+      "dataAffluente": "2027-07-01 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "25",
+      "dataAffluente": "2027-12-31 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "31",
+      "dataAffluente": "2028-07-01 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "37",
+      "dataAffluente": "2028-12-31 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "43",
+      "dataAffluente": "2029-07-01 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "49",
+      "dataAffluente": "2029-12-31 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "55",
+      "dataAffluente": "2030-07-01 23:00:00",
+      "importo": "1500000"
+    },
+    {
+      "mese": "61",
+      "dataAffluente": "2030-12-31 23:00:00",
+      "importo": "1500000"
+    }
+  ],
+  "messages": [],
+  "stdout": "mese\tdataAffluente\timporto\n7\t2026-07-01 23:00:00\t1500000\n13\t2026-12-31 23:00:00\t1500000\n19\t2027-07-01 23:00:00\t1500000\n25\t2027-12-31 23:00:00\t1500000\n31\t2028-07-01 23:00:00\t1500000\n37\t2028-12-31 23:00:00\t1500000\n43\t2029-07-01 23:00:00\t1500000\n49\t2029-12-31 23:00:00\t1500000\n55\t2030-07-01 23:00:00\t1500000\n61\t2030-12-31 23:00:00\t1500000\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

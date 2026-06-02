@@ -1,0 +1,30 @@
+{
+  "query": "SELECT id, email, name FROM users LIMIT 5",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT id, email, name FROM users LIMIT 5",
+  "rows": [
+    {
+      "id": "1",
+      "email": "andrea.pula.it@gmail.com",
+      "name": "andrea.pula.it"
+    },
+    {
+      "id": "690548",
+      "email": "andrea.vaturi@gmail.com",
+      "name": "Andrea Vaturi"
+    },
+    {
+      "id": "930003",
+      "email": "mirko.castignani@gmail.com",
+      "name": "Mirko Castignani"
+    },
+    {
+      "id": "1950109",
+      "email": "andrea.pula@gruppoae.com",
+      "name": "Andrea Pula"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tname\n1\tandrea.pula.it@gmail.com\tandrea.pula.it\n690548\tandrea.vaturi@gmail.com\tAndrea Vaturi\n930003\tmirko.castignani@gmail.com\tMirko Castignani\n1950109\tandrea.pula@gruppoae.com\tAndrea Pula\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

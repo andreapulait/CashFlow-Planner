@@ -1,0 +1,100 @@
+{
+  "query": "SELECT id, nome, userId, sorgente, rendimento, meseCreazione, dataCreazione\nFROM fiumi\nWHERE userId = 1\nORDER BY nome",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT id, nome, userId, sorgente, rendimento, meseCreazione, dataCreazione\nFROM fiumi\nWHERE userId = 1\nORDER BY nome",
+  "rows": [
+    {
+      "id": "360007",
+      "nome": "Bloody Sunday",
+      "userId": "1",
+      "sorgente": "2000000",
+      "rendimento": "2000",
+      "meseCreazione": "0",
+      "dataCreazione": "2026-01-31 23:00:00"
+    },
+    {
+      "id": "360010",
+      "nome": "Certificato",
+      "userId": "1",
+      "sorgente": "2000000",
+      "rendimento": "1000",
+      "meseCreazione": "0",
+      "dataCreazione": "2025-12-31 23:00:00"
+    },
+    {
+      "id": "360002",
+      "nome": "Dividendi",
+      "userId": "1",
+      "sorgente": "5000000",
+      "rendimento": "1000",
+      "meseCreazione": "0",
+      "dataCreazione": "2025-12-31 23:00:00"
+    },
+    {
+      "id": "360009",
+      "nome": "ETF",
+      "userId": "1",
+      "sorgente": "5000000",
+      "rendimento": "1000",
+      "meseCreazione": "0",
+      "dataCreazione": "2025-12-31 23:00:00"
+    },
+    {
+      "id": "360004",
+      "nome": "Gestito",
+      "userId": "1",
+      "sorgente": "3000000",
+      "rendimento": "1000",
+      "meseCreazione": "0",
+      "dataCreazione": "2025-12-31 23:00:00"
+    },
+    {
+      "id": "360011",
+      "nome": "Immobiliare",
+      "userId": "1",
+      "sorgente": "5000000",
+      "rendimento": "1000",
+      "meseCreazione": "0",
+      "dataCreazione": "2026-06-30 22:00:00"
+    },
+    {
+      "id": "360008",
+      "nome": "Liquidnow",
+      "userId": "1",
+      "sorgente": "4000000",
+      "rendimento": "5000",
+      "meseCreazione": "0",
+      "dataCreazione": "2025-12-31 23:00:00"
+    },
+    {
+      "id": "360003",
+      "nome": "Oro",
+      "userId": "1",
+      "sorgente": "5000000",
+      "rendimento": "2000",
+      "meseCreazione": "0",
+      "dataCreazione": "2025-12-31 23:00:00"
+    },
+    {
+      "id": "360005",
+      "nome": "Stacking",
+      "userId": "1",
+      "sorgente": "3000000",
+      "rendimento": "400",
+      "meseCreazione": "0",
+      "dataCreazione": "2025-12-31 23:00:00"
+    },
+    {
+      "id": "360006",
+      "nome": "Supermirko",
+      "userId": "1",
+      "sorgente": "2000000",
+      "rendimento": "2000",
+      "meseCreazione": "0",
+      "dataCreazione": "2026-01-31 23:00:00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tnome\tuserId\tsorgente\trendimento\tmeseCreazione\tdataCreazione\n360007\tBloody Sunday\t1\t2000000\t2000\t0\t2026-01-31 23:00:00\n360010\tCertificato\t1\t2000000\t1000\t0\t2025-12-31 23:00:00\n360002\tDividendi\t1\t5000000\t1000\t0\t2025-12-31 23:00:00\n360009\tETF\t1\t5000000\t1000\t0\t2025-12-31 23:00:00\n360004\tGestito\t1\t3000000\t1000\t0\t2025-12-31 23:00:00\n360011\tImmobiliare\t1\t5000000\t1000\t0\t2026-06-30 22:00:00\n360008\tLiquidnow\t1\t4000000\t5000\t0\t2025-12-31 23:00:00\n360003\tOro\t1\t5000000\t2000\t0\t2025-12-31 23:00:00\n360005\tStacking\t1\t3000000\t400\t0\t2025-12-31 23:00:00\n360006\tSupermirko\t1\t2000000\t2000\t0\t2026-01-31 23:00:00\n",
+  "stderr": "",
+  "execution_time_ms": 68
+}

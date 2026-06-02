@@ -1,0 +1,27 @@
+{
+  "query": "SELECT r.*, fo.nome as fiume_origine_nome, fd.nome as fiume_destinazione_nome FROM reinvestimenti r LEFT JOIN fiumi fo ON r.fiumeOrigineId = fo.id LEFT JOIN fiumi fd ON r.fiumeDestinazioneId = fd.id ORDER BY r.id DESC LIMIT 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT r.*, fo.nome as fiume_origine_nome, fd.nome as fiume_destinazione_nome FROM reinvestimenti r LEFT JOIN fiumi fo ON r.fiumeOrigineId = fo.id LEFT JOIN fiumi fd ON r.fiumeDestinazioneId = fd.id ORDER BY r.id DESC LIMIT 1",
+  "rows": [
+    {
+      "id": "270001",
+      "fiumeSorgenteId": "390003",
+      "fiumeDestinazioneId": "NULL",
+      "importoFisso": "NULL",
+      "percentuale": "5000",
+      "nuovoFiumeNome": "Test Reinvestimento",
+      "nuovoFiumeRendimento": "1000",
+      "descrizione": "NULL",
+      "createdAt": "2026-01-01 23:50:06",
+      "updatedAt": "2026-01-01 23:50:06",
+      "meseReinvestimento": "1",
+      "dataReinvestimento": "2026-01-31 23:00:00",
+      "fiumeOrigineId": "390003",
+      "fiume_origine_nome": "Dividendi",
+      "fiume_destinazione_nome": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfiumeSorgenteId\tfiumeDestinazioneId\timportoFisso\tpercentuale\tnuovoFiumeNome\tnuovoFiumeRendimento\tdescrizione\tcreatedAt\tupdatedAt\tmeseReinvestimento\tdataReinvestimento\tfiumeOrigineId\tfiume_origine_nome\tfiume_destinazione_nome\n270001\t390003\tNULL\tNULL\t5000\tTest Reinvestimento\t1000\tNULL\t2026-01-01 23:50:06\t2026-01-01 23:50:06\t1\t2026-01-31 23:00:00\t390003\tDividendi\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

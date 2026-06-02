@@ -1,0 +1,110 @@
+{
+  "query": "SELECT \n  a.id, a.fiumeId, a.groupId, a.importo, a.mese, a.descrizione,\n  f.nome as fiumeNome, f.userId as fiumeUserId\nFROM affluenti a\nLEFT JOIN fiumi f ON a.fiumeId = f.id\nWHERE f.id IS NULL OR f.userId != 1\nLIMIT 20",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user yzSB6Fs2no5uLXC.0b226ff0a0ad --database 3quDARJ9wiga9RVYRWFYFH --execute SELECT \n  a.id, a.fiumeId, a.groupId, a.importo, a.mese, a.descrizione,\n  f.nome as fiumeNome, f.userId as fiumeUserId\nFROM affluenti a\nLEFT JOIN fiumi f ON a.fiumeId = f.id\nWHERE f.id IS NULL OR f.userId != 1\nLIMIT 20",
+  "rows": [
+    {
+      "id": "210153",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "6",
+      "descrizione": "Semestral 1",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210154",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "12",
+      "descrizione": "Semestral 2",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210155",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "18",
+      "descrizione": "Semestral 3",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210156",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "24",
+      "descrizione": "Semestral 4",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210157",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "30",
+      "descrizione": "Semestral 5",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210158",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "36",
+      "descrizione": "Semestral 6",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210159",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "42",
+      "descrizione": "Semestral 7",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210160",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "48",
+      "descrizione": "Semestral 8",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210161",
+      "fiumeId": "330023",
+      "groupId": "test_1767290461661",
+      "importo": "12000",
+      "mese": "54",
+      "descrizione": "Semestral 9",
+      "fiumeNome": "Dividendi",
+      "fiumeUserId": "690548"
+    },
+    {
+      "id": "210162",
+      "fiumeId": "330024",
+      "groupId": "NULL",
+      "importo": "5000",
+      "mese": "6",
+      "descrizione": "Una tantum",
+      "fiumeNome": "Gestito",
+      "fiumeUserId": "690548"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfiumeId\tgroupId\timporto\tmese\tdescrizione\tfiumeNome\tfiumeUserId\n210153\t330023\ttest_1767290461661\t12000\t6\tSemestral 1\tDividendi\t690548\n210154\t330023\ttest_1767290461661\t12000\t12\tSemestral 2\tDividendi\t690548\n210155\t330023\ttest_1767290461661\t12000\t18\tSemestral 3\tDividendi\t690548\n210156\t330023\ttest_1767290461661\t12000\t24\tSemestral 4\tDividendi\t690548\n210157\t330023\ttest_1767290461661\t12000\t30\tSemestral 5\tDividendi\t690548\n210158\t330023\ttest_1767290461661\t12000\t36\tSemestral 6\tDividendi\t690548\n210159\t330023\ttest_1767290461661\t12000\t42\tSemestral 7\tDividendi\t690548\n210160\t330023\ttest_1767290461661\t12000\t48\tSemestral 8\tDividendi\t690548\n210161\t330023\ttest_1767290461661\t12000\t54\tSemestral 9\tDividendi\t690548\n210162\t330024\tNULL\t5000\t6\tUna tantum\tGestito\t690548\n",
+  "stderr": "",
+  "execution_time_ms": 208
+}
