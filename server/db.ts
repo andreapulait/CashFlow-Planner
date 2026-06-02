@@ -8,7 +8,8 @@ import {
   alertConfig, 
   scenari, 
   scenarioSnapshots,
-  users 
+  users,
+  passwordResetTokens,
 } from "../drizzle/schema";
 import { eq, and, gte, lte, desc, asc, sql } from "drizzle-orm";
 import { dateToMonthOffset } from './dateUtils';
@@ -1171,4 +1172,75 @@ export async function updateUserLastSignedIn(id: number) {
   await db.update(users)
     .set({ lastSignedIn: new Date(), updatedAt: new Date() })
     .where(eq(users.id, id));
+}
+
+export async function createEmailUser(params: {
+  email: string;
+  passwordHash: string;
+  name: string;
+}) {
+  const result = await db.insert(users).values({
+    email: params.email,
+    passwordHash: params.passwordHash,
+    name: params.name,
+    authProvider: 'email',
+    lastSignedIn: new Date(),
+  }).returning({ id: users.id });
+  return getUserById(result[0].id);
+}
+
+export async function createOAuthUser(params: {
+  email: string | null;
+  name: string | null;
+  authProvider: string;
+  oauthProviderId: string;
+}) {
+  const result = await db.insert(users).values({
+    email: params.email,
+    name: params.name,
+    authProvider: params.authProvider,
+    oauthProviderId: params.oauthProviderId,
+    lastSignedIn: new Date(),
+  }).returning({ id: users.id });
+  const user = await getUserById(result[0].id);
+  if (!user) throw new Error('Failed to create OAuth user');
+  return user;
+}
+
+export async function updateUserOAuthInfo(id: number, provider: string, providerId: string) {
+  await db.update(users)
+    .set({ authProvider: provider, oauthProviderId: providerId, updatedAt: new Date() })
+    .where(eq(users.id, id));
+}
+
+export async function updateUserPassword(id: number, passwordHash: string) {
+  await db.update(users)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(users.id, id));
+}
+
+export async function createPasswordResetToken(params: {
+  userId: number;
+  token: string;
+  expiresAt: Date;
+}) {
+  await db.insert(passwordResetTokens).values({
+    userId: params.userId,
+    token: params.token,
+    expiresAt: params.expiresAt,
+    used: 0,
+  });
+}
+
+export async function getPasswordResetToken(token: string) {
+  const result = await db.select().from(passwordResetTokens)
+    .where(eq(passwordResetTokens.token, token))
+    .limit(1);
+  return result[0] || null;
+}
+
+export async function markPasswordResetTokenUsed(id: number) {
+  await db.update(passwordResetTokens)
+    .set({ used: 1 })
+    .where(eq(passwordResetTokens.id, id));
 }
