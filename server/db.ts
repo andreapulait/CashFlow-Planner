@@ -53,16 +53,19 @@ export async function getImpostazioniByUserId(userId: number) {
   return result[0];
 }
 
-export async function updateImpostazioni(params: {
-  obiettivoMensile?: number;
-  orizzonteTemporale?: number;
-  budgetMensileAffluenti?: number;
-  dataInizio?: Date;
-}) {
-  const current = await getImpostazioni();
-  const updated = { ...current, ...params };
-  await db.update(impostazioni).set(updated).where(eq(impostazioni.id, current.id));
-  return updated;
+export async function updateImpostazioni(
+  userId: number,
+  params: {
+    obiettivoMensile?: number;
+    orizzonteTemporale?: number;
+    budgetMensileAffluenti?: number;
+    dataInizio?: Date;
+  }
+) {
+  const current = await getImpostazioniByUserId(userId);
+  if (!current) throw new Error("Impostazioni non trovate");
+  await db.update(impostazioni).set(params).where(eq(impostazioni.userId, userId));
+  return getImpostazioniByUserId(userId);
 }
 
 // ============================================================================
