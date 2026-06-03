@@ -14,28 +14,28 @@ import { formatDistanceToNow } from "date-fns";
 import { it } from "date-fns/locale";
 
 export default function NotificationCenter() {
-  const { data: notifiche = [], refetch } = trpc.notifiche.list.useQuery();
+  const utils = trpc.useUtils();
+  const { data: notifiche = [] } = trpc.notifiche.list.useQuery();
   const { data: unreadCount = 0 } = trpc.notifiche.unreadCount.useQuery();
-  
+
+  const invalidateAll = () => {
+    utils.notifiche.list.invalidate();
+    utils.notifiche.unreadCount.invalidate();
+  };
+
   const markAsReadMutation = trpc.notifiche.markAsRead.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("Notifica segnata come letta");
-    },
+    onSuccess: () => invalidateAll(),
   });
 
   const markAllAsReadMutation = trpc.notifiche.markAllAsRead.useMutation({
     onSuccess: () => {
-      refetch();
+      invalidateAll();
       toast.success("Tutte le notifiche segnate come lette");
     },
   });
 
   const deleteMutation = trpc.notifiche.delete.useMutation({
-    onSuccess: () => {
-      refetch();
-      toast.success("Notifica eliminata");
-    },
+    onSuccess: () => invalidateAll(),
   });
 
   const getNotificationIcon = (tipo: string) => {

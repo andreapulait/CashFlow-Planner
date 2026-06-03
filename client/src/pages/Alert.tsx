@@ -61,7 +61,95 @@ function getOperatorLabel(op: string) {
   return MAP[op] ?? op;
 }
 
-// ─── Componente ───────────────────────────────────────────────────────────────
+// ─── AlertForm (a livello modulo — NON dentro il componente) ─────────────────
+// Deve stare fuori per evitare che React smonta/rimonta il form ad ogni render
+// del componente padre (che causerebbe la perdita del focus ad ogni keystroke).
+
+interface AlertFormProps {
+  formData: FormData;
+  setFormData: (f: FormData) => void;
+  fiumi: Array<{ id: number; nome: string }>;
+}
+
+function AlertForm({ formData, setFormData, fiumi }: AlertFormProps) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>Tipo Alert</Label>
+        <Select value={formData.tipo} onValueChange={(v: AlertTipo) => setFormData({ ...formData, tipo: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="roi_threshold">Soglia ROI (%)</SelectItem>
+            <SelectItem value="value_milestone">Traguardo Valore (€)</SelectItem>
+            <SelectItem value="rendita_threshold">Soglia Rendita Mensile (€)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Nome Alert</Label>
+        <Input
+          id="alert-nome"
+          placeholder="es. ROI superiore al 10%"
+          value={formData.nome}
+          onChange={e => setFormData({ ...formData, nome: e.target.value })}
+        />
+      </div>
+
+      <div>
+        <Label>Condizione</Label>
+        <Select value={formData.operatore} onValueChange={(v: AlertOperatore) => setFormData({ ...formData, operatore: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="gte">Maggiore o uguale (≥)</SelectItem>
+            <SelectItem value="lte">Minore o uguale (≤)</SelectItem>
+            <SelectItem value="gt">Maggiore (&gt;)</SelectItem>
+            <SelectItem value="lt">Minore (&lt;)</SelectItem>
+            <SelectItem value="eq">Uguale (=)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>
+          Valore Soglia {formData.tipo === "roi_threshold" ? "(%)" : "(€)"}
+        </Label>
+        <Input
+          id="alert-soglia"
+          type="number"
+          placeholder="es. 10"
+          value={formData.soglia === 0 ? "" : formData.soglia / 100}
+          onChange={e => setFormData({ ...formData, soglia: Math.round(parseFloat(e.target.value || "0") * 100) })}
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          {formData.tipo === "roi_threshold"
+            ? "Percentuale di ritorno sull'investimento iniziale al termine del piano"
+            : formData.tipo === "value_milestone"
+            ? "Valore totale del portafoglio al termine del piano"
+            : "Rendita mensile generata al termine del piano"}
+        </p>
+      </div>
+
+      <div>
+        <Label>Fiume (opzionale)</Label>
+        <Select
+          value={formData.fiumeId?.toString() || "all"}
+          onValueChange={v => setFormData({ ...formData, fiumeId: v === "all" ? undefined : parseInt(v) })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tutti i fiumi</SelectItem>
+            {fiumi.map(f => (
+              <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+// ─── Componente principale ────────────────────────────────────────────────────
 
 export default function Alert() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -146,82 +234,6 @@ export default function Alert() {
       operatore: formData.operatore,
     });
   };
-
-  // Form condiviso crea/modifica
-  const AlertForm = () => (
-    <div className="space-y-4">
-      <div>
-        <Label>Tipo Alert</Label>
-        <Select value={formData.tipo} onValueChange={(v: AlertTipo) => setFormData({ ...formData, tipo: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="roi_threshold">Soglia ROI (%)</SelectItem>
-            <SelectItem value="value_milestone">Traguardo Valore (€)</SelectItem>
-            <SelectItem value="rendita_threshold">Soglia Rendita Mensile (€)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label>Nome Alert</Label>
-        <Input
-          placeholder="es. ROI superiore al 10%"
-          value={formData.nome}
-          onChange={e => setFormData({ ...formData, nome: e.target.value })}
-        />
-      </div>
-
-      <div>
-        <Label>Condizione</Label>
-        <Select value={formData.operatore} onValueChange={(v: AlertOperatore) => setFormData({ ...formData, operatore: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="gte">Maggiore o uguale (≥)</SelectItem>
-            <SelectItem value="lte">Minore o uguale (≤)</SelectItem>
-            <SelectItem value="gt">Maggiore (&gt;)</SelectItem>
-            <SelectItem value="lt">Minore (&lt;)</SelectItem>
-            <SelectItem value="eq">Uguale (=)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label>
-          Valore Soglia{" "}
-          {formData.tipo === "roi_threshold" ? "(%)" : "(€)"}
-        </Label>
-        <Input
-          type="number"
-          placeholder="es. 10"
-          value={formData.soglia === 0 ? "" : formData.soglia / 100}
-          onChange={e => setFormData({ ...formData, soglia: Math.round(parseFloat(e.target.value || "0") * 100) })}
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          {formData.tipo === "roi_threshold"
-            ? "Percentuale di ritorno sull'investimento iniziale al termine del piano"
-            : formData.tipo === "value_milestone"
-            ? "Valore totale del portafoglio al termine del piano"
-            : "Rendita mensile generata al termine del piano"}
-        </p>
-      </div>
-
-      <div>
-        <Label>Fiume (opzionale)</Label>
-        <Select
-          value={formData.fiumeId?.toString() || "all"}
-          onValueChange={v => setFormData({ ...formData, fiumeId: v === "all" ? undefined : parseInt(v) })}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tutti i fiumi</SelectItem>
-            {fiumi.map(f => (
-              <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
 
   if (isLoading) {
     return (
@@ -334,7 +346,7 @@ export default function Alert() {
                 La condizione sarà verificata subito dopo il salvataggio
               </DialogDescription>
             </DialogHeader>
-            <AlertForm />
+            <AlertForm formData={formData} setFormData={setFormData} fiumi={fiumi} />
             <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Annulla</Button>
               <Button onClick={handleCreate} disabled={createMutation.isPending}>
@@ -353,7 +365,7 @@ export default function Alert() {
                 La condizione sarà rivalutata subito dopo il salvataggio
               </DialogDescription>
             </DialogHeader>
-            <AlertForm />
+            <AlertForm formData={formData} setFormData={setFormData} fiumi={fiumi} />
             <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>Annulla</Button>
               <Button onClick={handleEdit} disabled={updateMutation.isPending}>
