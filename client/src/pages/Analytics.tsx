@@ -3,9 +3,9 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import {
   Dialog,
   DialogContent,
@@ -19,8 +19,10 @@ import { TrendingUp, Wallet, Target, DollarSign, Percent, Calendar, FileText } f
 import { PatrimonioChart } from "@/components/charts/PatrimonioChart";
 import { RenditaChart } from "@/components/charts/RenditaChart";
 import { FiumiComparisonChart } from "@/components/charts/FiumiComparisonChart";
-import { generatePDFReport, formatCurrency as formatCurrencyPDF, formatPercentage } from "@/lib/pdfGenerator";
+import { generatePDFReport, formatPercentage } from "@/lib/pdfGenerator";
 import { toast } from "sonner";
+
+const PIE_COLORS = ["#10b981", "#3b82f6", "#a855f7", "#f97316", "#ec4899", "#06b6d4", "#84cc16"];
 
 export default function Analytics() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -121,7 +123,7 @@ export default function Analytics() {
       <div className="min-h-screen bg-background">
         <div className="container py-8">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold text-foreground mb-2">Analytics Avanzata</h1>
+            <h1 className="text-4xl font-bold text-foreground mb-2">Analytics</h1>
             <p className="text-muted-foreground">
               Metriche chiave e analisi approfondita delle performance
             </p>
@@ -146,7 +148,7 @@ export default function Analytics() {
       <div className="container py-8">
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-foreground mb-2">Analytics Avanzata</h1>
+            <h1 className="text-4xl font-bold text-foreground mb-2">Analytics</h1>
             <p className="text-muted-foreground">
               Metriche chiave e analisi approfondita delle performance del tuo portafoglio
             </p>
@@ -267,7 +269,7 @@ export default function Analytics() {
           <KPICard
             title="Valore Portafoglio Attuale"
             value={formatCurrency(kpis.valoreAttuale)}
-            subtitle="Valore totale al mese 1"
+            subtitle="Capitale iniziale investito"
             icon={Wallet}
           />
           <KPICard
@@ -333,6 +335,48 @@ export default function Analytics() {
               />
             </CardContent>
           </Card>
+
+          {/* Composizione Portafoglio — torta */}
+          {(() => {
+            const composizioneData = simulazione?.map(fiume => {
+              const ultimoMese = fiume.mesi.find(a => a.mese === impostazioni?.orizzonteTemporale);
+              return { nome: fiume.nome, valore: ultimoMese?.valore || 0 };
+            }) || [];
+            const totale = composizioneData.reduce((s, e) => s + e.valore, 0);
+            const formatCurrencyInt = (v: number) => new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Composizione Portafoglio (Mese {impostazioni?.orizzonteTemporale})</CardTitle>
+                  <CardDescription>Distribuzione del capitale per fiume</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <PieChart>
+                      <Pie
+                        data={composizioneData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={(entry) => `${entry.nome}: ${totale > 0 ? ((entry.valore / totale) * 100).toFixed(1) : 0}%`}
+                        outerRadius={100}
+                        dataKey="valore"
+                        nameKey="nome"
+                      >
+                        {composizioneData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        formatter={(value: number) => [formatCurrencyInt(value), ""]}
+                        contentStyle={{ backgroundColor: "rgba(255,255,255,0.95)", border: "1px solid #ccc", borderRadius: "8px" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <Card className="md:col-span-2">
             <CardHeader>

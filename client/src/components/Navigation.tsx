@@ -70,7 +70,7 @@ export default function Navigation() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant={isActiveRoute(["/simulazione", "/grafici", "/analytics", "/flussi", "/scenari", "/calendario"]) ? "default" : "ghost"}
+                    variant={isActiveRoute(["/simulazione", "/analytics", "/flussi", "/scenari", "/calendario"]) ? "default" : "ghost"}
                     size="sm"
                   >
                     <LineChart className="mr-2 h-4 w-4" />
@@ -83,12 +83,6 @@ export default function Navigation() {
                     <Link href="/simulazione" className="flex items-center cursor-pointer w-full">
                       <LineChart className="mr-2 h-4 w-4" />
                       Simulazione
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/grafici" className="flex items-center cursor-pointer w-full">
-                      <BarChart3 className="mr-2 h-4 w-4" />
-                      Grafici
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
