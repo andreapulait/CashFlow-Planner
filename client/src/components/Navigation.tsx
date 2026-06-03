@@ -50,7 +50,7 @@ const ANALISI_ITEMS = [
 ];
 
 const GESTIONE_ITEMS = [
-  { href: "/",             icon: LayoutDashboard, label: "Fiumi" },
+  { href: "/fiumi",        icon: LayoutDashboard, label: "Fiumi" },
   { href: "/apporti",      icon: Wallet,          label: "Affluenti" },
   { href: "/reinvestimenti", icon: ArrowRightLeft, label: "Reinvestimenti" },
   { href: "/alert",        icon: BellRing,        label: "Regole Alert" },
