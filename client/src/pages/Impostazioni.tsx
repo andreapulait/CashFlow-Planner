@@ -53,7 +53,7 @@ export default function Impostazioni() {
     onSuccess: (result) => {
       utils.affluenti.listAll.invalidate();
       utils.affluenti.getBudgetMensile.invalidate();
-      toast.success(`Ricalcolo completato: ${result.affluentiAggiornati} affluenti aggiornati`);
+      toast.success(`Ricalcolo completato: ${result.count} affluenti aggiornati`);
     },
     onError: (error) => {
       toast.error("Errore nel ricalcolo: " + error.message);

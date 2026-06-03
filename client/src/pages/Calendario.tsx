@@ -57,32 +57,32 @@ export default function Calendario() {
     // Add reinvestimenti events
     if (reinvestimenti && fiumi) {
       reinvestimenti.forEach(reinv => {
-        const fiumeSorgente = fiumi.find(f => f.id === reinv.fiumeSorgenteId);
-        const fiumeDestinazione = reinv.fiumeDestinazioneId 
-          ? fiumi.find(f => f.id === reinv.fiumeDestinazioneId)
+        const fiumeSorgente = fiumi.find(f => f.id === reinv.reinvestimento.fiumeOrigineId);
+        const fiumeDestinazione = reinv.reinvestimento.fiumeDestinazioneId
+          ? fiumi.find(f => f.id === reinv.reinvestimento.fiumeDestinazioneId)
           : null;
 
-        const eventDate = addYears(today, reinv.mese);
-        
+        const eventDate = addYears(today, reinv.reinvestimento.meseReinvestimento);
+
         let importo = 0;
-        if (reinv.importoFisso) {
-          importo = reinv.importoFisso;
-        } else if (reinv.percentuale && fiumeSorgente) {
+        if (reinv.reinvestimento.importoFisso) {
+          importo = reinv.reinvestimento.importoFisso;
+        } else if (reinv.reinvestimento.percentuale && fiumeSorgente) {
           // Estimate based on initial capital
-          importo = Math.round((fiumeSorgente.sorgente * reinv.percentuale) / 10000);
+          importo = Math.round((fiumeSorgente.sorgente * reinv.reinvestimento.percentuale) / 10000);
         }
 
         eventList.push({
-          id: reinv.id,
-          title: `Reinvestimento: ${fiumeSorgente?.nome || "?"} → ${fiumeDestinazione?.nome || reinv.nuovoFiumeNome || "Nuovo"}`,
+          id: reinv.reinvestimento.id,
+          title: `Reinvestimento: ${fiumeSorgente?.nome || "?"} → ${fiumeDestinazione?.nome || reinv.reinvestimento.nuovoFiumeNome || "Nuovo"}`,
           start: eventDate,
           end: eventDate,
           resource: {
             tipo: "reinvestimento",
             importo,
             fiumeSorgente: fiumeSorgente?.nome,
-            fiumeDestinazione: fiumeDestinazione?.nome || reinv.nuovoFiumeNome || undefined,
-            descrizione: reinv.descrizione ?? undefined,
+            fiumeDestinazione: fiumeDestinazione?.nome || reinv.reinvestimento.nuovoFiumeNome || undefined,
+            descrizione: undefined,
           },
         });
       });

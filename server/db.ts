@@ -21,15 +21,17 @@ import { dateToMonthOffset } from './dateUtils';
 export async function getImpostazioni() {
   const result = await db.select().from(impostazioni).limit(1);
   if (result.length === 0) {
-    // Create default settings
-    const defaultSettings = {
+    // Return defaults without persisting (userId required for insert)
+    return {
+      id: 0,
+      userId: 0,
       obiettivoMensile: 20000,
-      orizzonteTemporale: 60, // 5 years in months
+      orizzonteTemporale: 60,
       budgetMensileAffluenti: 5000,
       dataInizio: new Date('2026-01-01'),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
-    await db.insert(impostazioni).values(defaultSettings);
-    return defaultSettings;
   }
   return result[0];
 }
@@ -532,10 +534,10 @@ export async function simulazioneQuinquennale() {
   for (const fiume of allFiumi) {
     statoFiumi[fiume.id] = {
       valore: fiume.sorgente,
-      meseInizio: fiume.meseInizio,
+      meseInizio: fiume.meseCreazione,
     };
   }
-  
+
   // Simulate month by month
   for (let mese = 0; mese < settings.orizzonteTemporale; mese++) {
     const rigaMese: SimulazioneRiga = {
@@ -650,10 +652,10 @@ export async function getEvoluzionePatrimonio() {
   for (const fiume of allFiumi) {
     statoFiumi[fiume.id] = {
       valore: fiume.sorgente,
-      meseInizio: fiume.meseInizio,
+      meseInizio: fiume.meseCreazione,
     };
   }
-  
+
   // Simulate month by month
   for (let mese = 0; mese < settings.orizzonteTemporale; mese++) {
     let valoreTotale = 0;
@@ -714,7 +716,7 @@ export async function getPerformanceComparativa() {
       .reduce((sum, a) => sum + a.importo, 0);
     
     // Simulate to end of horizon
-    for (let mese = fiume.meseInizio; mese < settings.orizzonteTemporale; mese++) {
+    for (let mese = fiume.meseCreazione; mese < settings.orizzonteTemporale; mese++) {
       const rendimentoMensile = fiume.rendimento / 12 / 100;
       const rendita = valore * rendimentoMensile;
       
@@ -757,12 +759,12 @@ export async function getNotifiche() {
 }
 
 export async function markNotificaAsRead(id: number) {
-  await db.update(notifiche).set({ letta: true }).where(eq(notifiche.id, id));
+  await db.update(notifiche).set({ letta: 1 }).where(eq(notifiche.id, id));
   return { success: true };
 }
 
 export async function markAllNotificheAsRead() {
-  await db.update(notifiche).set({ letta: true });
+  await db.update(notifiche).set({ letta: 1 });
   return { success: true };
 }
 
@@ -772,6 +774,7 @@ export async function deleteNotifica(id: number) {
 }
 
 export async function createNotifica(params: {
+  userId: number;
   tipo: "info" | "warning" | "success" | "error";
   titolo: string;
   messaggio: string;
@@ -779,8 +782,10 @@ export async function createNotifica(params: {
   dataAlert?: Date | null;
   affluenteId?: number | null;
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { affluenteId: _affluenteId, dataAlert: _dataAlert, ...notificaParams } = params;
   const result = await db.insert(notifiche).values({
-    ...params,
+    ...notificaParams,
     letta: 0,
     priorita: params.priorita || "medium",
   }).returning({ id: notifiche.id });
@@ -797,11 +802,16 @@ export async function getAlertConfig() {
 }
 
 export async function createAlertConfig(params: {
-  tipoAlert: "soglia_roi" | "traguardo_valore" | "soglia_rendita";
-  soglia: number;
-  operatore: "maggiore" | "minore" | "uguale";
+  userId: number;
+  nome: string;
+  tipo: string;
+  soglia?: number | null;
+  operatore?: string | null;
   fiumeId?: number | null;
-  attivo?: boolean;
+  attivo?: number;
+  dataAlert?: Date | null;
+  giorniPreavviso?: number | null;
+  affluenteId?: number | null;
 }) {
   const result = await db.insert(alertConfig).values({
     ...params,
@@ -817,7 +827,7 @@ export async function updateAlertConfig(
     soglia?: number;
     operatore?: "maggiore" | "minore" | "uguale";
     fiumeId?: number | null;
-    attivo?: boolean;
+    attivo?: number;
   }
 ) {
   await db.update(alertConfig).set(params).where(eq(alertConfig.id, id));
@@ -829,7 +839,7 @@ export async function toggleAlertConfig(id: number) {
   const current = await db.select().from(alertConfig).where(eq(alertConfig.id, id));
   if (current.length === 0) throw new Error("Alert not found");
   
-  const newAttivo = !current[0].attivo;
+  const newAttivo = current[0].attivo ? 0 : 1;
   await db.update(alertConfig).set({ attivo: newAttivo }).where(eq(alertConfig.id, id));
   return { attivo: newAttivo };
 }
@@ -856,6 +866,7 @@ export async function createAlertAutomatico(params: {
   const fiumeNome = fiume?.nome || "Fiume";
   
   return createNotifica({
+    userId: fiume?.userId ?? 0,
     tipo: "info",
     titolo: `Promemoria Affluente: ${fiumeNome}`,
     messaggio: `Affluente di ${aff.importo.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} programmato per ${aff.dataAffluente.toLocaleDateString('it-IT')}`,
@@ -892,8 +903,8 @@ export async function createAlertGruppo(params: {
     // Check if alert already exists for this affluente
     const existingAlert = await db
       .select()
-      .from(notifiche)
-      .where(eq(notifiche.affluenteId, aff.id));
+      .from(alertConfig)
+      .where(eq(alertConfig.affluenteId, aff.id));
     
     if (existingAlert.length > 0) continue;
     
@@ -901,6 +912,7 @@ export async function createAlertGruppo(params: {
     dataAlert.setDate(dataAlert.getDate() - params.giorniPreavviso);
     
     await createNotifica({
+      userId: fiume?.userId ?? 0,
       tipo: "info",
       titolo: `Promemoria Affluente: ${fiumeNome}`,
       messaggio: `Affluente di ${aff.importo.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })} programmato per ${aff.dataAffluente.toLocaleDateString('it-IT')}`,
@@ -908,7 +920,7 @@ export async function createAlertGruppo(params: {
       dataAlert,
       affluenteId: aff.id,
     });
-    
+
     createdCount++;
   }
   
@@ -928,8 +940,10 @@ export async function getScenariByUserId(userId: number) {
 }
 
 export async function createScenario(params: {
+  userId: number;
   nome: string;
   descrizione?: string | null;
+  attivo?: number;
 }) {
   const result = await db.insert(scenari).values(params).returning({ id: scenari.id });
   const inserted = await db.select().from(scenari).where(eq(scenari.id, result[0].id)).limit(1);
@@ -959,14 +973,47 @@ export async function saveScenarioSnapshot(scenarioId: number) {
   
   const result = await db.insert(scenarioSnapshots).values({
     scenarioId,
-    snapshotData: JSON.stringify(snapshot),
+    fiumiData: JSON.stringify(snapshot.fiumi),
+    affluentiData: JSON.stringify(snapshot.affluenti),
+    reinvestimentiData: JSON.stringify(snapshot.reinvestimenti),
+    impostazioniData: JSON.stringify(snapshot.impostazioni),
   }).returning({ id: scenarioSnapshots.id });
+  const inserted = await db.select().from(scenarioSnapshots).where(eq(scenarioSnapshots.id, result[0].id)).limit(1);
+  return inserted[0];
+}
+
+export async function createScenarioSnapshot(params: {
+  scenarioId: number;
+  fiumiData: string;
+  affluentiData: string;
+  reinvestimentiData: string;
+  impostazioniData: string;
+}) {
+  const result = await db.insert(scenarioSnapshots).values(params).returning({ id: scenarioSnapshots.id });
   const inserted = await db.select().from(scenarioSnapshots).where(eq(scenarioSnapshots.id, result[0].id)).limit(1);
   return inserted[0];
 }
 
 export async function getScenarioSnapshots(scenarioId: number) {
   return db.select().from(scenarioSnapshots).where(eq(scenarioSnapshots.scenarioId, scenarioId)).orderBy(desc(scenarioSnapshots.createdAt));
+}
+
+export async function getScenarioSnapshotByScenarioId(scenarioId: number) {
+  const result = await db.select().from(scenarioSnapshots).where(eq(scenarioSnapshots.scenarioId, scenarioId)).orderBy(desc(scenarioSnapshots.createdAt)).limit(1);
+  return result[0] || null;
+}
+
+export async function getScenarioById(id: number) {
+  const result = await db.select().from(scenari).where(eq(scenari.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function setScenarioAttivo(userId: number, scenarioId: number) {
+  // Deactivate all scenarios for this user
+  await db.update(scenari).set({ attivo: 0 }).where(eq(scenari.userId, userId));
+  // Activate the selected scenario
+  await db.update(scenari).set({ attivo: 1 }).where(and(eq(scenari.id, scenarioId), eq(scenari.userId, userId)));
+  return getScenarioById(scenarioId);
 }
 
 // ============================================================================
@@ -1036,8 +1083,10 @@ export async function importData(data: any) {
   
   // Import impostazioni (merge with existing)
   if (importImpostazioni) {
-    const { id, ...impostazioniData } = importImpostazioni;
-    await updateImpostazioni(impostazioniData);
+    const { id, userId, ...impostazioniData } = importImpostazioni;
+    if (userId) {
+      await updateImpostazioni(userId, impostazioniData);
+    }
   }
   
   return { success: true };
@@ -1073,8 +1122,7 @@ export async function getUserByEmail(email: string) {
 
 export async function getUserByOAuthProvider(provider: string, providerId: string) {
   const result = await db.select().from(users)
-    .where(eq(users.authProvider, provider))
-    .where(eq(users.oauthProviderId, providerId))
+    .where(and(eq(users.authProvider, provider), eq(users.oauthProviderId, providerId)))
     .limit(1);
   return result[0] || null;
 }

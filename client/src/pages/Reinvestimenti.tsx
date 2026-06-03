@@ -401,26 +401,26 @@ export default function Reinvestimenti() {
                 </TableHeader>
                 <TableBody>
                   {reinvestimenti.map((reinv) => (
-                    <TableRow key={reinv.id}>
+                    <TableRow key={reinv.reinvestimento.id}>
                       <TableCell className="font-medium">
-                        {reinv.dataReinvestimento
-                          ? formatMonthOffset(reinv.mese, reinv.dataReinvestimento)
-                          : formatMonthOffset(reinv.mese, impostazioni?.dataInizio)
+                        {reinv.reinvestimento.dataReinvestimento
+                          ? formatMonthOffset(reinv.reinvestimento.meseReinvestimento, reinv.reinvestimento.dataReinvestimento)
+                          : formatMonthOffset(reinv.reinvestimento.meseReinvestimento, impostazioni?.dataInizio)
                         }
                       </TableCell>
-                      <TableCell>{getFiumeNome(reinv.fiumeSorgenteId)}</TableCell>
-                      <TableCell>{getDestinazioneDisplay(reinv)}</TableCell>
+                      <TableCell>{getFiumeNome(reinv.reinvestimento.fiumeOrigineId)}</TableCell>
+                      <TableCell>{getDestinazioneDisplay(reinv.reinvestimento)}</TableCell>
                       <TableCell className="font-semibold text-primary">
-                        {getImportoDisplay(reinv)}
+                        {getImportoDisplay(reinv.reinvestimento)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {reinv.descrizione || "-"}
+                        -
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDelete(reinv.id)}
+                          onClick={() => handleDelete(reinv.reinvestimento.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

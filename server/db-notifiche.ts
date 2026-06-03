@@ -30,7 +30,7 @@ export async function getUnreadNotificheCount(userId: number): Promise<number> {
 export async function createNotifica(data: InsertNotifica): Promise<Notifica | null> {
   const db = await getDb();
   if (!db) return null;
-  const [notifica] = await db.insert(notifiche).values(data).$returningId();
+  const [notifica] = await db.insert(notifiche).values(data).returning({ id: notifiche.id });
   const [created] = await db.select().from(notifiche).where(eq(notifiche.id, notifica.id));
   return created;
 }
@@ -92,7 +92,7 @@ export async function getActiveAlertConfig(userId: number): Promise<AlertConfig[
 export async function createAlertConfig(data: InsertAlertConfig): Promise<AlertConfig | null> {
   const db = await getDb();
   if (!db) return null;
-  const [alert] = await db.insert(alertConfig).values(data).$returningId();
+  const [alert] = await db.insert(alertConfig).values(data).returning({ id: alertConfig.id });
   const [created] = await db.select().from(alertConfig).where(eq(alertConfig.id, alert.id));
   return created;
 }
