@@ -273,7 +273,7 @@ export const appRouter = router({
         percentuale: z.number().int().min(1).max(10000).optional(),
         nuovoFiumeNome: z.string().optional(),
         nuovoFiumeRendimento: z.number().int().min(0).max(10000).optional(),
-        descrizione: z.string().optional(),
+        descrizione: z.string().optional(),  // salvato nella tabella reinvestimenti
       }))
       .mutation(async ({ input }) => {
         // Validate: either importoFisso or percentuale must be provided
@@ -297,9 +297,10 @@ export const appRouter = router({
           percentuale: input.percentuale || null,
           nuovoFiumeNome: input.nuovoFiumeNome || null,
           nuovoFiumeRendimento: input.nuovoFiumeRendimento || null,
+          descrizione: input.descrizione || null,
         });
       }),
-    
+
     update: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
@@ -311,6 +312,7 @@ export const appRouter = router({
         percentuale: z.number().int().min(1).max(10000).optional(),
         nuovoFiumeNome: z.string().optional(),
         nuovoFiumeRendimento: z.number().int().min(0).max(10000).optional(),
+        descrizione: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const { id, fiumeSorgenteId, mese, ...rest } = input;

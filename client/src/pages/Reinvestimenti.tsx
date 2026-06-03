@@ -197,6 +197,16 @@ function ReinvestimentoForm({
         </>
       )}
 
+      {/* Descrizione */}
+      <div className="grid gap-2">
+        <Label htmlFor="reinv-descrizione">Descrizione (opzionale)</Label>
+        <Input
+          id="reinv-descrizione"
+          value={fd.descrizione}
+          placeholder="es. Diversificazione portafoglio"
+          onChange={(e) => setFd({ ...fd, descrizione: e.target.value })}
+        />
+      </div>
     </div>
   );
 }
@@ -241,6 +251,7 @@ function buildPayload(
     data.nuovoFiumeRendimento = Math.round(r * 100);
   }
 
+  if (fd.descrizione) data.descrizione = fd.descrizione;
   return data;
 }
 
@@ -327,7 +338,7 @@ export default function Reinvestimenti() {
       percentuale: r.percentuale ? (r.percentuale / 100).toString() : "",
       nuovoFiumeNome: r.nuovoFiumeNome || "",
       nuovoFiumeRendimento: r.nuovoFiumeRendimento ? (r.nuovoFiumeRendimento / 100).toString() : "",
-      descrizione: "",
+      descrizione: r.descrizione || "",
     });
     setIsEditOpen(true);
   };
@@ -418,6 +429,7 @@ export default function Reinvestimenti() {
                     <TableHead>Da (Sorgente)</TableHead>
                     <TableHead>A (Destinazione)</TableHead>
                     <TableHead>Importo</TableHead>
+                    <TableHead>Descrizione</TableHead>
                     <TableHead className="text-right">Azioni</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -440,6 +452,9 @@ export default function Reinvestimenti() {
                         <TableCell>{getDestinazioneDisplay(r)}</TableCell>
                         <TableCell className="font-semibold text-primary">
                           {getImportoDisplay(r)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {r.descrizione || "-"}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">

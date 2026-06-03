@@ -508,6 +508,7 @@ export async function createReinvestimento(params: {
   percentuale?: number | null;
   nuovoFiumeNome?: string | null;
   nuovoFiumeRendimento?: number | null;
+  descrizione?: string | null;
 }) {
   const result = await db.insert(reinvestimenti).values(params).returning({ id: reinvestimenti.id });
   const inserted = await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, result[0].id)).limit(1);
@@ -526,6 +527,7 @@ export async function updateReinvestimento(
     percentuale?: number | null;
     nuovoFiumeNome?: string | null;
     nuovoFiumeRendimento?: number | null;
+    descrizione?: string | null;
   }
 ) {
   const check = await db
@@ -548,6 +550,7 @@ export async function updateReinvestimento(
   if (params.percentuale         !== undefined) updateData.percentuale         = params.percentuale;
   if (params.nuovoFiumeNome      !== undefined) updateData.nuovoFiumeNome      = params.nuovoFiumeNome;
   if (params.nuovoFiumeRendimento !== undefined) updateData.nuovoFiumeRendimento = params.nuovoFiumeRendimento;
+  if (params.descrizione          !== undefined) updateData.descrizione          = params.descrizione;
 
   if (Object.keys(updateData).length === 0) return (await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, id)).limit(1))[0];
 

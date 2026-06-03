@@ -113,6 +113,7 @@ export const reinvestimenti = pgTable("reinvestimenti", {
   percentuale: integer("percentuale"),
   nuovoFiumeNome: text("nuovoFiumeNome"),
   nuovoFiumeRendimento: integer("nuovoFiumeRendimento"),
+  descrizione: text("descrizione"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

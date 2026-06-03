@@ -75,9 +75,13 @@ CREATE TABLE IF NOT EXISTS "reinvestimenti" (
   "percentuale"           INTEGER,   -- basis points
   "nuovoFiumeNome"        TEXT,
   "nuovoFiumeRendimento"  INTEGER,
+  "descrizione"           TEXT,
   "createdAt"             TIMESTAMP NOT NULL DEFAULT NOW(),
   "updatedAt"             TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+-- Migrazione per DB esistenti: aggiunge la colonna se non presente
+ALTER TABLE "reinvestimenti" ADD COLUMN IF NOT EXISTS "descrizione" TEXT;
 
 -- ── Scenari ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "scenari" (
