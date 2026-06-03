@@ -314,8 +314,12 @@ export const appRouter = router({
         descrizione: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const { id, ...updates } = input;
-        return db.updateReinvestimento(id, ctx.user.id, updates);
+        const { id, fiumeSorgenteId, mese, ...rest } = input;
+        // Rimappa i nomi del campo client → nomi DB
+        const params: any = { ...rest };
+        if (fiumeSorgenteId !== undefined) params.fiumeOrigineId = fiumeSorgenteId;
+        if (mese !== undefined) params.meseReinvestimento = mese;
+        return db.updateReinvestimento(id, ctx.user.id, params);
       }),
 
     delete: protectedProcedure

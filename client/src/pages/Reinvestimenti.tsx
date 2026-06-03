@@ -14,7 +14,9 @@ import { MonthYearPicker } from "@/components/DatePicker";
 import { formatMonthOffset, dateToMonthOffset } from "@/lib/dateFormat";
 import { toast } from "sonner";
 
-type FormData = {
+// ─── Tipi ────────────────────────────────────────────────────────────────────
+
+export type FormData = {
   fiumeSorgenteId: string;
   fiumeDestinazioneId: string;
   mese: string;
@@ -26,7 +28,7 @@ type FormData = {
   descrizione: string;
 };
 
-const emptyForm = (): FormData => ({
+export const emptyForm = (): FormData => ({
   fiumeSorgenteId: "",
   fiumeDestinazioneId: "",
   mese: "1",
@@ -37,6 +39,223 @@ const emptyForm = (): FormData => ({
   nuovoFiumeRendimento: "",
   descrizione: "",
 });
+
+// ─── Form (componente a livello modulo — NON annidato dentro Reinvestimenti) ──
+// Deve stare fuori per evitare che React smonta/rimonta il form ad ogni render
+// del componente padre (che causerebbe la perdita del focus ad ogni keystroke).
+
+interface ReinvestimentoFormProps {
+  fd: FormData;
+  setFd: (f: FormData) => void;
+  tipo: "fisso" | "percentuale";
+  setTipo: (t: "fisso" | "percentuale") => void;
+  dest: "esistente" | "nuovo";
+  setDest: (d: "esistente" | "nuovo") => void;
+  fiumi: Array<{ id: number; nome: string }> | undefined;
+  dataInizioPiano: Date | string | null | undefined;
+}
+
+function ReinvestimentoForm({
+  fd, setFd, tipo, setTipo, dest, setDest, fiumi, dataInizioPiano,
+}: ReinvestimentoFormProps) {
+  return (
+    <div className="grid gap-4 py-4">
+      {/* Fiume Sorgente */}
+      <div className="grid gap-2">
+        <Label>Fiume Sorgente (da cui prelevare)</Label>
+        <Select value={fd.fiumeSorgenteId} onValueChange={(v) => setFd({ ...fd, fiumeSorgenteId: v })}>
+          <SelectTrigger><SelectValue placeholder="Seleziona fiume sorgente" /></SelectTrigger>
+          <SelectContent>
+            {fiumi?.map(f => (
+              <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Data */}
+      <div className="grid gap-2">
+        <Label>Data Reinvestimento *</Label>
+        <MonthYearPicker
+          value={fd.dataReinvestimento}
+          onChange={(date) => {
+            const mese = date && dataInizioPiano
+              ? dateToMonthOffset(new Date(dataInizioPiano), date).toString()
+              : "1";
+            setFd({ ...fd, dataReinvestimento: date, mese });
+          }}
+          placeholder="Seleziona mese"
+          minDate={dataInizioPiano ? new Date(dataInizioPiano) : new Date()}
+        />
+      </div>
+
+      {/* Tipo importo */}
+      <div className="grid gap-2">
+        <Label>Tipo di Importo</Label>
+        <RadioGroup value={tipo} onValueChange={(v: any) => setTipo(v)}>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="percentuale" id="tipo-perc" />
+            <Label htmlFor="tipo-perc" className="font-normal cursor-pointer">
+              Percentuale del capitale
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="fisso" id="tipo-fisso" />
+            <Label htmlFor="tipo-fisso" className="font-normal cursor-pointer">
+              Importo fisso
+            </Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {tipo === "percentuale" ? (
+        <div className="grid gap-2">
+          <Label htmlFor="reinv-percentuale">Percentuale (%)</Label>
+          <Input
+            id="reinv-percentuale"
+            type="number"
+            value={fd.percentuale}
+            step="0.01"
+            placeholder="es. 20"
+            onChange={(e) => setFd({ ...fd, percentuale: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            Percentuale del capitale accumulato nel fiume sorgente
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-2">
+          <Label htmlFor="reinv-importo">Importo Fisso (€)</Label>
+          <Input
+            id="reinv-importo"
+            type="number"
+            value={fd.importoFisso}
+            placeholder="es. 10000"
+            onChange={(e) => setFd({ ...fd, importoFisso: e.target.value })}
+          />
+        </div>
+      )}
+
+      {/* Destinazione */}
+      <div className="grid gap-2">
+        <Label>Destinazione</Label>
+        <RadioGroup value={dest} onValueChange={(v: any) => setDest(v)}>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="esistente" id="dest-esistente" />
+            <Label htmlFor="dest-esistente" className="font-normal cursor-pointer">
+              Fiume esistente
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="nuovo" id="dest-nuovo" />
+            <Label htmlFor="dest-nuovo" className="font-normal cursor-pointer">
+              Crea nuovo fiume
+            </Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {dest === "esistente" ? (
+        <div className="grid gap-2">
+          <Label>Fiume Destinazione</Label>
+          <Select
+            value={fd.fiumeDestinazioneId}
+            onValueChange={(v) => setFd({ ...fd, fiumeDestinazioneId: v })}
+          >
+            <SelectTrigger><SelectValue placeholder="Seleziona fiume destinazione" /></SelectTrigger>
+            <SelectContent>
+              {fiumi
+                ?.filter(f => f.id.toString() !== fd.fiumeSorgenteId)
+                .map(f => (
+                  <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-2">
+            <Label htmlFor="nuovo-nome">Nome Nuovo Fiume</Label>
+            <Input
+              id="nuovo-nome"
+              value={fd.nuovoFiumeNome}
+              placeholder="es. Investimento Immobiliare"
+              onChange={(e) => setFd({ ...fd, nuovoFiumeNome: e.target.value })}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="nuovo-rendimento">Rendimento Nuovo Fiume (%)</Label>
+            <Input
+              id="nuovo-rendimento"
+              type="number"
+              value={fd.nuovoFiumeRendimento}
+              placeholder="es. 8"
+              step="0.01"
+              onChange={(e) => setFd({ ...fd, nuovoFiumeRendimento: e.target.value })}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Descrizione */}
+      <div className="grid gap-2">
+        <Label htmlFor="reinv-descrizione">Descrizione (opzionale)</Label>
+        <Input
+          id="reinv-descrizione"
+          value={fd.descrizione}
+          placeholder="es. Diversificazione portafoglio"
+          onChange={(e) => setFd({ ...fd, descrizione: e.target.value })}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers di validazione ───────────────────────────────────────────────────
+
+function buildPayload(
+  fd: FormData,
+  tipo: "fisso" | "percentuale",
+  dest: "esistente" | "nuovo",
+): Record<string, any> | null {
+  if (!fd.fiumeSorgenteId) { toast.error("Seleziona un fiume sorgente"); return null; }
+  if (!fd.dataReinvestimento) { toast.error("Seleziona una data di reinvestimento"); return null; }
+
+  const mese = parseInt(fd.mese);
+  if (isNaN(mese)) { toast.error("Mese non valido"); return null; }
+
+  const data: Record<string, any> = {
+    fiumeSorgenteId: parseInt(fd.fiumeSorgenteId),
+    mese,
+    dataReinvestimento: fd.dataReinvestimento,
+  };
+
+  if (tipo === "fisso") {
+    const v = parseFloat(fd.importoFisso);
+    if (isNaN(v) || v <= 0) { toast.error("Inserisci un importo fisso valido"); return null; }
+    data.importoFisso = Math.round(v * 100);
+  } else {
+    const v = parseFloat(fd.percentuale);
+    if (isNaN(v) || v <= 0 || v > 100) { toast.error("Inserisci una percentuale tra 0.01 e 100"); return null; }
+    data.percentuale = Math.round(v * 100);
+  }
+
+  if (dest === "esistente") {
+    if (!fd.fiumeDestinazioneId) { toast.error("Seleziona un fiume destinazione"); return null; }
+    data.fiumeDestinazioneId = parseInt(fd.fiumeDestinazioneId);
+  } else {
+    if (!fd.nuovoFiumeNome) { toast.error("Inserisci il nome del nuovo fiume"); return null; }
+    const r = parseFloat(fd.nuovoFiumeRendimento);
+    if (isNaN(r) || r < 0) { toast.error("Inserisci un rendimento valido per il nuovo fiume"); return null; }
+    data.nuovoFiumeNome = fd.nuovoFiumeNome;
+    data.nuovoFiumeRendimento = Math.round(r * 100);
+  }
+
+  if (fd.descrizione) data.descrizione = fd.descrizione;
+  return data;
+}
+
+// ─── Componente principale ────────────────────────────────────────────────────
 
 export default function Reinvestimenti() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -93,55 +312,16 @@ export default function Reinvestimenti() {
     onError: (error) => toast.error("Errore: " + error.message),
   });
 
-  const buildPayload = (fd: FormData, tipo: "fisso" | "percentuale", dest: "esistente" | "nuovo") => {
-    if (!fd.fiumeSorgenteId) { toast.error("Seleziona un fiume sorgente"); return null; }
-    if (!fd.dataReinvestimento) { toast.error("Seleziona una data di reinvestimento"); return null; }
-
-    const mese = parseInt(fd.mese);
-    if (isNaN(mese)) { toast.error("Mese non valido"); return null; }
-
-    const data: any = {
-      fiumeSorgenteId: parseInt(fd.fiumeSorgenteId),
-      mese,
-      dataReinvestimento: fd.dataReinvestimento,
-    };
-
-    if (tipo === "fisso") {
-      const v = parseFloat(fd.importoFisso);
-      if (isNaN(v) || v <= 0) { toast.error("Inserisci un importo fisso valido"); return null; }
-      data.importoFisso = Math.round(v * 100);
-    } else {
-      const v = parseFloat(fd.percentuale);
-      if (isNaN(v) || v <= 0 || v > 100) { toast.error("Inserisci una percentuale tra 0 e 100"); return null; }
-      data.percentuale = Math.round(v * 100);
-    }
-
-    if (dest === "esistente") {
-      if (!fd.fiumeDestinazioneId) { toast.error("Seleziona un fiume destinazione"); return null; }
-      data.fiumeDestinazioneId = parseInt(fd.fiumeDestinazioneId);
-    } else {
-      if (!fd.nuovoFiumeNome) { toast.error("Inserisci il nome del nuovo fiume"); return null; }
-      const r = parseFloat(fd.nuovoFiumeRendimento);
-      if (isNaN(r) || r < 0) { toast.error("Inserisci un rendimento valido per il nuovo fiume"); return null; }
-      data.nuovoFiumeNome = fd.nuovoFiumeNome;
-      data.nuovoFiumeRendimento = Math.round(r * 100);
-    }
-
-    if (fd.descrizione) data.descrizione = fd.descrizione;
-    return data;
-  };
-
   const handleCreate = () => {
     const data = buildPayload(formData, tipoImporto, tipoDestinazione);
-    if (data) createMutation.mutate(data);
+    if (data) createMutation.mutate(data as any);
   };
 
   const handleEdit = () => {
     if (!editingId) return;
     const data = buildPayload(editFormData, tipoImportoEdit, tipoDestinazioneEdit);
     if (!data) return;
-    const { fiumeSorgenteId: _, ...updates } = data;
-    updateMutation.mutate({ id: editingId, ...updates });
+    updateMutation.mutate({ id: editingId, ...data } as any);
   };
 
   const openEditDialog = (reinv: any) => {
@@ -158,7 +338,7 @@ export default function Reinvestimenti() {
       percentuale: r.percentuale ? (r.percentuale / 100).toString() : "",
       nuovoFiumeNome: r.nuovoFiumeNome || "",
       nuovoFiumeRendimento: r.nuovoFiumeRendimento ? (r.nuovoFiumeRendimento / 100).toString() : "",
-      descrizione: r.descrizione || "",
+      descrizione: "",
     });
     setIsEditOpen(true);
   };
@@ -171,7 +351,11 @@ export default function Reinvestimenti() {
   };
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(value);
+    new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 2,
+    }).format(value);
 
   const getFiumeNome = (id: number | null) => {
     if (!id) return "-";
@@ -180,7 +364,8 @@ export default function Reinvestimenti() {
 
   const getDestinazioneDisplay = (r: any) => {
     if (r.fiumeDestinazioneId) return getFiumeNome(r.fiumeDestinazioneId);
-    if (r.nuovoFiumeNome) return `${r.nuovoFiumeNome} (nuovo · ${(r.nuovoFiumeRendimento / 100).toFixed(2)}%)`;
+    if (r.nuovoFiumeNome)
+      return `${r.nuovoFiumeNome} (nuovo · ${(r.nuovoFiumeRendimento / 100).toFixed(2)}%)`;
     return "-";
   };
 
@@ -189,121 +374,6 @@ export default function Reinvestimenti() {
     if (r.percentuale) return `${(r.percentuale / 100).toFixed(2)}%`;
     return "-";
   };
-
-  const ReinvestimentoForm = ({
-    fd, setFd, tipo, setTipo, dest, setDest,
-  }: {
-    fd: FormData; setFd: (f: FormData) => void;
-    tipo: "fisso" | "percentuale"; setTipo: (t: "fisso" | "percentuale") => void;
-    dest: "esistente" | "nuovo"; setDest: (d: "esistente" | "nuovo") => void;
-  }) => (
-    <div className="grid gap-4 py-4">
-      {/* Fiume Sorgente */}
-      <div className="grid gap-2">
-        <Label>Fiume Sorgente (da cui prelevare)</Label>
-        <Select value={fd.fiumeSorgenteId} onValueChange={(v) => setFd({ ...fd, fiumeSorgenteId: v })}>
-          <SelectTrigger><SelectValue placeholder="Seleziona fiume sorgente" /></SelectTrigger>
-          <SelectContent>
-            {fiumi?.map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Data */}
-      <div className="grid gap-2">
-        <Label>Data Reinvestimento *</Label>
-        <MonthYearPicker
-          value={fd.dataReinvestimento}
-          onChange={(date) => {
-            const mese = date && impostazioni?.dataInizio
-              ? dateToMonthOffset(new Date(impostazioni.dataInizio), date).toString()
-              : "1";
-            setFd({ ...fd, dataReinvestimento: date, mese });
-          }}
-          placeholder="Seleziona mese"
-          minDate={impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date()}
-        />
-      </div>
-
-      {/* Tipo importo */}
-      <div className="grid gap-2">
-        <Label>Tipo di Importo</Label>
-        <RadioGroup value={tipo} onValueChange={(v: any) => setTipo(v)}>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="percentuale" id={`perc-${dest}`} />
-            <Label htmlFor={`perc-${dest}`} className="font-normal">Percentuale del capitale</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="fisso" id={`fisso-${dest}`} />
-            <Label htmlFor={`fisso-${dest}`} className="font-normal">Importo fisso</Label>
-          </div>
-        </RadioGroup>
-      </div>
-
-      {tipo === "percentuale" ? (
-        <div className="grid gap-2">
-          <Label>Percentuale (%)</Label>
-          <Input type="number" value={fd.percentuale} step="0.01" placeholder="es. 20"
-            onChange={(e) => setFd({ ...fd, percentuale: e.target.value })} />
-          <p className="text-xs text-muted-foreground">Percentuale del capitale accumulato nel fiume sorgente</p>
-        </div>
-      ) : (
-        <div className="grid gap-2">
-          <Label>Importo Fisso (€)</Label>
-          <Input type="number" value={fd.importoFisso} placeholder="es. 10000"
-            onChange={(e) => setFd({ ...fd, importoFisso: e.target.value })} />
-        </div>
-      )}
-
-      {/* Destinazione */}
-      <div className="grid gap-2">
-        <Label>Destinazione</Label>
-        <RadioGroup value={dest} onValueChange={(v: any) => setDest(v)}>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="esistente" id={`est-${tipo}`} />
-            <Label htmlFor={`est-${tipo}`} className="font-normal">Fiume esistente</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="nuovo" id={`nuov-${tipo}`} />
-            <Label htmlFor={`nuov-${tipo}`} className="font-normal">Crea nuovo fiume</Label>
-          </div>
-        </RadioGroup>
-      </div>
-
-      {dest === "esistente" ? (
-        <div className="grid gap-2">
-          <Label>Fiume Destinazione</Label>
-          <Select value={fd.fiumeDestinazioneId} onValueChange={(v) => setFd({ ...fd, fiumeDestinazioneId: v })}>
-            <SelectTrigger><SelectValue placeholder="Seleziona fiume destinazione" /></SelectTrigger>
-            <SelectContent>
-              {fiumi?.filter(f => f.id.toString() !== fd.fiumeSorgenteId)
-                .map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-2">
-            <Label>Nome Nuovo Fiume</Label>
-            <Input value={fd.nuovoFiumeNome} placeholder="es. Investimento Immobiliare"
-              onChange={(e) => setFd({ ...fd, nuovoFiumeNome: e.target.value })} />
-          </div>
-          <div className="grid gap-2">
-            <Label>Rendimento Nuovo Fiume (%)</Label>
-            <Input type="number" value={fd.nuovoFiumeRendimento} placeholder="es. 8" step="0.01"
-              onChange={(e) => setFd({ ...fd, nuovoFiumeRendimento: e.target.value })} />
-          </div>
-        </>
-      )}
-
-      {/* Descrizione */}
-      <div className="grid gap-2">
-        <Label>Descrizione (opzionale)</Label>
-        <Input value={fd.descrizione} placeholder="es. Diversificazione portafoglio"
-          onChange={(e) => setFd({ ...fd, descrizione: e.target.value })} />
-      </div>
-    </div>
-  );
 
   if (fiumiLoading || reinvLoading) {
     return (
@@ -359,7 +429,6 @@ export default function Reinvestimenti() {
                     <TableHead>Da (Sorgente)</TableHead>
                     <TableHead>A (Destinazione)</TableHead>
                     <TableHead>Importo</TableHead>
-                    <TableHead>Descrizione</TableHead>
                     <TableHead className="text-right">Azioni</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -383,13 +452,20 @@ export default function Reinvestimenti() {
                         <TableCell className="font-semibold text-primary">
                           {getImportoDisplay(r)}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">-</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEditDialog(reinv); }}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => { e.stopPropagation(); openEditDialog(reinv); }}
+                            >
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={(e) => handleDelete(e, r.id)}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => handleDelete(e, r.id)}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -405,7 +481,7 @@ export default function Reinvestimenti() {
 
         {/* Dialog Crea */}
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Crea Nuovo Reinvestimento</DialogTitle>
               <DialogDescription>
@@ -413,9 +489,14 @@ export default function Reinvestimenti() {
               </DialogDescription>
             </DialogHeader>
             <ReinvestimentoForm
-              fd={formData} setFd={setFormData}
-              tipo={tipoImporto} setTipo={setTipoImporto}
-              dest={tipoDestinazione} setDest={setTipoDestinazione}
+              fd={formData}
+              setFd={setFormData}
+              tipo={tipoImporto}
+              setTipo={setTipoImporto}
+              dest={tipoDestinazione}
+              setDest={setTipoDestinazione}
+              fiumi={fiumi}
+              dataInizioPiano={impostazioni?.dataInizio}
             />
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Annulla</Button>
@@ -428,7 +509,7 @@ export default function Reinvestimenti() {
 
         {/* Dialog Modifica */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Modifica Reinvestimento</DialogTitle>
               <DialogDescription>
@@ -436,9 +517,14 @@ export default function Reinvestimenti() {
               </DialogDescription>
             </DialogHeader>
             <ReinvestimentoForm
-              fd={editFormData} setFd={setEditFormData}
-              tipo={tipoImportoEdit} setTipo={setTipoImportoEdit}
-              dest={tipoDestinazioneEdit} setDest={setTipoDestinazioneEdit}
+              fd={editFormData}
+              setFd={setEditFormData}
+              tipo={tipoImportoEdit}
+              setTipo={setTipoImportoEdit}
+              dest={tipoDestinazioneEdit}
+              setDest={setTipoDestinazioneEdit}
+              fiumi={fiumi}
+              dataInizioPiano={impostazioni?.dataInizio}
             />
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>Annulla</Button>
