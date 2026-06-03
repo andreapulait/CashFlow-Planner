@@ -121,6 +121,33 @@ export const reinvestimenti = pgTable("reinvestimenti", {
 export type Reinvestimento = typeof reinvestimenti.$inferSelect;
 export type InsertReinvestimento = typeof reinvestimenti.$inferInsert;
 
+// ─── Reinvestimenti Periodici ─────────────────────────────────────────────────
+// Regola dinamica: ogni N mesi, preleva X% dalla rendita (o capitale)
+// di fiumeOrigine e versalo in fiumeDestinazione.
+// Il calcolo avviene in tempo reale nella simulazione — non precalcolato.
+export const reinvestimentiPeriodici = pgTable("reinvestimentiPeriodici", {
+  id: serial("id").primaryKey(),
+  fiumeOrigineId: integer("fiumeOrigineId")
+    .notNull()
+    .references(() => fiumi.id, { onDelete: "cascade" }),
+  fiumeDestinazioneId: integer("fiumeDestinazioneId")
+    .references(() => fiumi.id, { onDelete: "set null" }),
+  meseInizio: integer("meseInizio").notNull(),
+  meseFine: integer("meseFine").notNull(),
+  /** Mesi tra applicazioni: 1=mensile, 3=trimestrale, 6=semestrale, 12=annuale */
+  periodicita: integer("periodicita").notNull().default(1),
+  /** "rendita" = % della rendita mensile | "capitale" = % del capitale accumulato */
+  tipoCalcolo: varchar("tipoCalcolo", { length: 20 }).notNull().default("rendita"),
+  /** Percentuale in basis points (es. 2000 = 20%) */
+  percentuale: integer("percentuale").notNull(),
+  descrizione: text("descrizione"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type ReinvestimentoPeriodico = typeof reinvestimentiPeriodici.$inferSelect;
+export type InsertReinvestimentoPeriodico = typeof reinvestimentiPeriodici.$inferInsert;
+
 export const scenari = pgTable("scenari", {
   id: serial("id").primaryKey(),
   userId: integer("userId")

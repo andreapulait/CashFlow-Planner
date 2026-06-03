@@ -83,6 +83,22 @@ CREATE TABLE IF NOT EXISTS "reinvestimenti" (
 -- Migrazione per DB esistenti: aggiunge la colonna se non presente
 ALTER TABLE "reinvestimenti" ADD COLUMN IF NOT EXISTS "descrizione" TEXT;
 
+-- ── Reinvestimenti Periodici ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "reinvestimentiPeriodici" (
+  "id"                  SERIAL PRIMARY KEY,
+  "fiumeOrigineId"      INTEGER NOT NULL REFERENCES "fiumi"("id") ON DELETE CASCADE,
+  "fiumeDestinazioneId" INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
+  "meseInizio"          INTEGER NOT NULL,
+  "meseFine"            INTEGER NOT NULL,
+  "periodicita"         INTEGER NOT NULL DEFAULT 1,
+  "tipoCalcolo"         VARCHAR(20) NOT NULL DEFAULT 'rendita',
+  "percentuale"         INTEGER NOT NULL,
+  "descrizione"         TEXT,
+  "createdAt"           TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updatedAt"           TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS "idx_reinvPeriodici_origine" ON "reinvestimentiPeriodici"("fiumeOrigineId");
+
 -- ── Scenari ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "scenari" (
   "id"          SERIAL PRIMARY KEY,

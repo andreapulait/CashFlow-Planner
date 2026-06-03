@@ -1,12 +1,13 @@
 import { db } from "./db.config";
-import { 
-  fiumi, 
-  affluenti, 
-  reinvestimenti, 
-  impostazioni, 
-  notifiche, 
-  alertConfig, 
-  scenari, 
+import {
+  fiumi,
+  affluenti,
+  reinvestimenti,
+  reinvestimentiPeriodici,
+  impostazioni,
+  notifiche,
+  alertConfig,
+  scenari,
   scenarioSnapshots,
   users,
   passwordResetTokens,
@@ -557,6 +558,103 @@ export async function updateReinvestimento(
   await db.update(reinvestimenti).set(updateData).where(eq(reinvestimenti.id, id));
   const updated = await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, id)).limit(1);
   return updated[0];
+}
+
+// ============================================================================
+// REINVESTIMENTI PERIODICI
+// ============================================================================
+
+export async function getReinvestimentiPeriodicByUserId(userId: number) {
+  const userFiumi = await db.select({ id: fiumi.id }).from(fiumi).where(eq(fiumi.userId, userId));
+  const fiumiIds = userFiumi.map(f => f.id);
+  if (fiumiIds.length === 0) return [];
+
+  const rows = await db
+    .select({
+      rp: reinvestimentiPeriodici,
+      fiumeOrigineName: sql<string>`origine.nome`,
+      fiumeDestinazioneName: sql<string>`destinazione.nome`,
+    })
+    .from(reinvestimentiPeriodici)
+    .leftJoin(sql`${fiumi} as origine`, eq(reinvestimentiPeriodici.fiumeOrigineId, sql`origine.id`))
+    .leftJoin(sql`${fiumi} as destinazione`, eq(reinvestimentiPeriodici.fiumeDestinazioneId, sql`destinazione.id`))
+    .where(sql`${reinvestimentiPeriodici.fiumeOrigineId} IN (${sql.join(fiumiIds.map(id => sql`${id}`), sql`, `)})`)
+    .orderBy(asc(reinvestimentiPeriodici.meseInizio));
+
+  return rows;
+}
+
+export async function createReinvestimentoPeriodico(params: {
+  fiumeOrigineId: number;
+  fiumeDestinazioneId: number | null;
+  meseInizio: number;
+  meseFine: number;
+  periodicita: number;
+  tipoCalcolo: string;
+  percentuale: number;
+  descrizione?: string | null;
+}) {
+  const result = await db
+    .insert(reinvestimentiPeriodici)
+    .values(params)
+    .returning({ id: reinvestimentiPeriodici.id });
+  const inserted = await db
+    .select()
+    .from(reinvestimentiPeriodici)
+    .where(eq(reinvestimentiPeriodici.id, result[0].id))
+    .limit(1);
+  return inserted[0];
+}
+
+export async function updateReinvestimentoPeriodico(
+  id: number,
+  userId: number,
+  params: {
+    fiumeOrigineId?: number;
+    fiumeDestinazioneId?: number | null;
+    meseInizio?: number;
+    meseFine?: number;
+    periodicita?: number;
+    tipoCalcolo?: string;
+    percentuale?: number;
+    descrizione?: string | null;
+  }
+) {
+  const check = await db
+    .select({ id: reinvestimentiPeriodici.id })
+    .from(reinvestimentiPeriodici)
+    .innerJoin(fiumi, eq(reinvestimentiPeriodici.fiumeOrigineId, fiumi.id))
+    .where(and(eq(reinvestimentiPeriodici.id, id), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Reinvestimento periodico non trovato o non autorizzato");
+
+  const updateData: Record<string, any> = {};
+  if (params.fiumeOrigineId      !== undefined) updateData.fiumeOrigineId      = params.fiumeOrigineId;
+  if (params.fiumeDestinazioneId !== undefined) updateData.fiumeDestinazioneId = params.fiumeDestinazioneId;
+  if (params.meseInizio          !== undefined) updateData.meseInizio          = params.meseInizio;
+  if (params.meseFine            !== undefined) updateData.meseFine            = params.meseFine;
+  if (params.periodicita         !== undefined) updateData.periodicita         = params.periodicita;
+  if (params.tipoCalcolo         !== undefined) updateData.tipoCalcolo         = params.tipoCalcolo;
+  if (params.percentuale         !== undefined) updateData.percentuale         = params.percentuale;
+  if (params.descrizione         !== undefined) updateData.descrizione         = params.descrizione;
+
+  if (Object.keys(updateData).length > 0) {
+    await db.update(reinvestimentiPeriodici).set(updateData).where(eq(reinvestimentiPeriodici.id, id));
+  }
+  const updated = await db.select().from(reinvestimentiPeriodici).where(eq(reinvestimentiPeriodici.id, id)).limit(1);
+  return updated[0];
+}
+
+export async function deleteReinvestimentoPeriodico(id: number, userId: number) {
+  const check = await db
+    .select({ id: reinvestimentiPeriodici.id })
+    .from(reinvestimentiPeriodici)
+    .innerJoin(fiumi, eq(reinvestimentiPeriodici.fiumeOrigineId, fiumi.id))
+    .where(and(eq(reinvestimentiPeriodici.id, id), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Reinvestimento periodico non trovato o non autorizzato");
+  await db.delete(reinvestimentiPeriodici).where(eq(reinvestimentiPeriodici.id, id));
+  return { success: true };
 }
 
 export async function deleteReinvestimento(id: number, userId: number) {
