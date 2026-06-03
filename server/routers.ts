@@ -1426,7 +1426,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const dbNotifiche = await import("./db-notifiche");
         const created = await dbNotifiche.createAlertConfig({ userId: ctx.user.id, ...input });
-        if (created) await evaluateAndNotify(created, ctx.user.id).catch(console.error);
+        // Fire-and-forget: non blocca la risposta, la notifica arriva in background
+        if (created) evaluateAndNotify(created, ctx.user.id).catch(console.error);
         return created;
       }),
 
@@ -1444,7 +1445,8 @@ export const appRouter = router({
         const { id, ...data } = input;
         const dbNotifiche = await import("./db-notifiche");
         const updated = await dbNotifiche.updateAlertConfig(id, ctx.user.id, data);
-        if (updated) await evaluateAndNotify(updated, ctx.user.id).catch(console.error);
+        // Fire-and-forget: non blocca la risposta, la notifica arriva in background
+        if (updated) evaluateAndNotify(updated, ctx.user.id).catch(console.error);
         return updated;
       }),
     
