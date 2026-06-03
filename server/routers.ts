@@ -148,6 +148,106 @@ async function runSimulazione(userId: number, orizzonteTemporale: number) {
   return { fiumiStates, fiumiRendite, fiumiInfo, allFiumi, affluentiByFiume, reinvestimentiByMese };
 }
 
+// ─── Alert evaluation ─────────────────────────────────────────────────────────
+// Dopo la creazione o modifica di un alert, valuta immediatamente la condizione
+// sulla simulazione corrente e crea una notifica se è verificata.
+
+function compareValues(value: number, operator: string, threshold: number): boolean {
+  switch (operator) {
+    case 'gt':  return value > threshold;
+    case 'lt':  return value < threshold;
+    case 'gte': return value >= threshold;
+    case 'lte': return value <= threshold;
+    case 'eq':  return Math.abs(value - threshold) < 0.01;
+    default:    return false;
+  }
+}
+
+async function evaluateAndNotify(
+  alertCfg: { id: number; tipo: string; nome: string; soglia: number | null; operatore: string | null; fiumeId: number | null; attivo: number },
+  userId: number
+): Promise<void> {
+  if (alertCfg.attivo !== 1) return;
+  if (!alertCfg.soglia || !alertCfg.operatore) return;
+  if (!['roi_threshold', 'value_milestone', 'rendita_threshold'].includes(alertCfg.tipo)) return;
+
+  const impostazioni = await db.getImpostazioniByUserId(userId);
+  const { fiumiStates, fiumiRendite, allFiumi } = await runSimulazione(userId, impostazioni.orizzonteTemporale);
+
+  // Calcola metriche (filtra per fiume se specificato)
+  let capitaleTotale = 0;
+  let cashFlowMensile = 0;
+
+  for (const [fiumeId, stateMap] of Array.from(fiumiStates.entries())) {
+    if (alertCfg.fiumeId && fiumeId !== alertCfg.fiumeId) continue;
+    capitaleTotale += stateMap.get(impostazioni.orizzonteTemporale) || 0;
+  }
+  for (const [fiumeId, renditeMap] of Array.from(fiumiRendite.entries())) {
+    if (alertCfg.fiumeId && fiumeId !== alertCfg.fiumeId) continue;
+    cashFlowMensile += renditeMap.get(impostazioni.orizzonteTemporale) || 0;
+  }
+
+  // ROI sul sottoinsieme di fiumi rilevante
+  const relevantFiumi = alertCfg.fiumeId
+    ? allFiumi.filter(f => f.id === alertCfg.fiumeId)
+    : allFiumi;
+  const totalInitialCents = relevantFiumi.reduce((s, f) => s + f.sorgente, 0);
+  const roi = totalInitialCents > 0
+    ? ((capitaleTotale * 100 - totalInitialCents) / totalInitialCents) * 100
+    : 0;
+
+  const fmt = (v: number) =>
+    new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
+
+  let currentValue: number;
+  let currentLabel: string;
+
+  switch (alertCfg.tipo) {
+    case 'roi_threshold':
+      currentValue = roi;
+      currentLabel = `${roi.toFixed(1)}% ROI`;
+      break;
+    case 'value_milestone':
+      currentValue = capitaleTotale * 100; // euro → centesimi per confronto con soglia
+      currentLabel = `${fmt(capitaleTotale)} valore portafoglio`;
+      break;
+    case 'rendita_threshold':
+      currentValue = cashFlowMensile * 100;
+      currentLabel = `${fmt(cashFlowMensile)}/mese di rendita`;
+      break;
+    default:
+      return;
+  }
+
+  // La soglia per ROI è in %*100 (es. 10% → 1000), quindi confronto con roi * 100
+  // Per valore e rendita la soglia è in centesimi
+  const thresholdForCompare = alertCfg.tipo === 'roi_threshold'
+    ? alertCfg.soglia / 100  // converti soglia in % per confrontare con roi (%)
+    : alertCfg.soglia;       // già in centesimi
+
+  const valueForCompare = alertCfg.tipo === 'roi_threshold'
+    ? currentValue           // roi è già in %
+    : currentValue;          // già in centesimi
+
+  if (!compareValues(valueForCompare, alertCfg.operatore, thresholdForCompare)) return;
+
+  // Condizione verificata: crea notifica
+  const opLabel: Record<string, string> = { gte: '≥', lte: '≤', gt: '>', lt: '<', eq: '=' };
+  const sogliaLabel = alertCfg.tipo === 'roi_threshold'
+    ? `${(alertCfg.soglia / 100).toFixed(1)}%`
+    : fmt(alertCfg.soglia / 100);
+
+  const dbNotifiche = await import("./db-notifiche");
+  await dbNotifiche.createNotifica({
+    userId,
+    tipo: alertCfg.tipo === 'value_milestone' ? 'milestone' : 'threshold',
+    titolo: `🔔 ${alertCfg.nome}`,
+    messaggio: `Condizione verificata: ${currentLabel} ${opLabel[alertCfg.operatore] ?? alertCfg.operatore} ${sogliaLabel}`,
+    priorita: alertCfg.tipo === 'rendita_threshold' ? 'high' : 'medium',
+    fiumeId: alertCfg.fiumeId ?? null,
+  });
+}
+
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -1325,24 +1425,27 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const dbNotifiche = await import("./db-notifiche");
-        return dbNotifiche.createAlertConfig({
-          userId: ctx.user.id,
-          ...input,
-        });
+        const created = await dbNotifiche.createAlertConfig({ userId: ctx.user.id, ...input });
+        if (created) await evaluateAndNotify(created, ctx.user.id).catch(console.error);
+        return created;
       }),
-    
+
     update: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
+        tipo: z.enum(["roi_threshold", "value_milestone", "rendita_threshold"]).optional(),
         nome: z.string().min(1).max(255).optional(),
         soglia: z.number().int().optional(),
+        fiumeId: z.number().int().positive().nullable().optional(),
         operatore: z.enum(["gt", "lt", "gte", "lte", "eq"]).optional(),
         attivo: z.number().int().min(0).max(1).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...data } = input;
         const dbNotifiche = await import("./db-notifiche");
-        return dbNotifiche.updateAlertConfig(id, ctx.user.id, data);
+        const updated = await dbNotifiche.updateAlertConfig(id, ctx.user.id, data);
+        if (updated) await evaluateAndNotify(updated, ctx.user.id).catch(console.error);
+        return updated;
       }),
     
     delete: protectedProcedure
