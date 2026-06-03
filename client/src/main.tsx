@@ -6,14 +6,29 @@ import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Non riprovare su errori di autenticazione — causerebbe loop infiniti
+      retry: (failureCount, error) => {
+        if (error instanceof TRPCClientError) {
+          const code = (error as TRPCClientError<any>).data?.code;
+          if (code === "UNAUTHORIZED" || code === "FORBIDDEN") return false;
+        }
+        return failureCount < 3;
+      },
+    },
+  },
+});
 
-// Se la sessione scade, ricarica la pagina (il layout mostrerà il dialog di login)
+// Se la sessione scade, invalida auth.me → il dialog di login compare
+// senza ricaricare la pagina (window.reload causava un loop infinito)
 const handleUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
-  if (error.data?.code === "UNAUTHORIZED" || error.data?.code === "FORBIDDEN") {
-    window.location.reload();
+  const code = (error as TRPCClientError<any>).data?.code;
+  if (code === "UNAUTHORIZED" || code === "FORBIDDEN") {
+    queryClient.invalidateQueries({ queryKey: [["auth", "me"]] });
   }
 };
 
