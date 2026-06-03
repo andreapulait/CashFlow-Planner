@@ -11,7 +11,7 @@ import {
   users,
   passwordResetTokens,
 } from "../drizzle/schema";
-import { eq, and, gte, lte, desc, asc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, sql, inArray } from "drizzle-orm";
 import { dateToMonthOffset } from './dateUtils';
 
 // ============================================================================
@@ -216,20 +216,22 @@ export async function createAffluentiRicorrenti(params: {
   
   const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const affluentiToCreate = [];
-  
-  // Calculate base date for the first affluente
-  let baseDate = params.dataAffluente || new Date();
-  
-  // First affluente should be at meseInizio + periodicita (not meseInizio itself)
-  // For example: if meseInizio=0 (Jan 2026) and periodicita=1, first affluente is at month 1 (Feb 2026)
-  let currentMese = params.meseInizio + params.periodicita;
-  
-  // Generate affluenti until we exceed meseInizio + durataMesi
-  for (let i = 1; currentMese < params.meseInizio + params.durataMesi; i++) {
-    // Calculate date for this affluente by adding months to base date
+
+  // La data base è quella del primo apporto (obbligatoria)
+  const baseDate = params.dataAffluente || new Date();
+
+  // Il primo apporto parte esattamente a meseInizio.
+  // Il numero di apport è floor(durataMesi / periodicita).
+  // Esempio: meseInizio=5 (giugno), periodicita=1, durataMesi=10 → apport ai mesi 5,6,7,8,9,10,11,12,13,14 (10 apport)
+  const numApporti = Math.floor(params.durataMesi / params.periodicita);
+
+  for (let i = 0; i < numApporti; i++) {
+    const currentMese = params.meseInizio + (i * params.periodicita);
+
+    // La data di ogni apporto è calcolata aggiungendo i*periodicita mesi alla data base
     const currentDate = new Date(baseDate);
     currentDate.setMonth(currentDate.getMonth() + (i * params.periodicita));
-    
+
     affluentiToCreate.push({
       fiumeId: params.fiumeId,
       importo: params.importo,
@@ -241,8 +243,6 @@ export async function createAffluentiRicorrenti(params: {
       durataMesi: params.durataMesi,
       groupId,
     });
-    
-    currentMese += params.periodicita;
   }
   
   if (affluentiToCreate.length > 0) {
@@ -367,93 +367,34 @@ export async function deleteAffluentiGroup(groupId: string) {
  * Get monthly aggregated affluenti allocation for budget tracking
  * 
  * Logic:
- * - Recurring affluenti: distribute monthly average (importo/periodicita) 
- *   from (first_contribution_month - periodicita) to last_contribution_month
- * - One-time affluenti: allocate full amount only in the specific month
- * 
- * Example:
- * - Semestral 12,000€ starting July 2026 (month 6) ending July 2030 (month 54)
- *   → allocate 2,000€/month from January 2026 (month 0) to July 2030 (month 54)
- * - One-time 5,000€ in July 2026 (month 6)
- *   → allocate 5,000€ ONLY in month 6
- * - Result for July 2026: 2,000€ + 5,000€ = 7,000€ (140% of 5,000€ budget)
+ * Somma gli importi reali degli affluenti pianificati mese per mese.
+ * Ogni mese mostra esattamente quanto liquidità è impegnata in quel mese,
+ * senza medie né distribuzioni: se a giugno escono 1200€, giugno mostra 1200€.
  */
-export async function getAffluentiMensiliAggregati() {
-  const allAffluenti = await db.select().from(affluenti).orderBy(asc(affluenti.mese));
-  const settings = await getImpostazioni();
-  
-  // Initialize monthly totals object (not Map to avoid iteration issues)
+export async function getAffluentiMensiliAggregati(userId: number, orizzonteTemporale: number) {
+  // Recupera solo i fiumi dell'utente
+  const userFiumi = await db.select({ id: fiumi.id }).from(fiumi).where(eq(fiumi.userId, userId));
+  const fiumiIds = userFiumi.map(f => f.id);
+
+  const emptyResult = Array.from({ length: orizzonteTemporale }, (_, i) => ({ mese: i, totale: 0 }));
+  if (fiumiIds.length === 0) return emptyResult;
+
+  const allAffluenti = await db
+    .select({ mese: affluenti.mese, importo: affluenti.importo })
+    .from(affluenti)
+    .where(inArray(affluenti.fiumeId, fiumiIds));
+
   const monthlyTotals: Record<number, number> = {};
-  
-  // Group affluenti by groupId for recurring processing
-  const groupMap: Record<string, typeof allAffluenti> = {};
-  const oneTimeAffluenti: typeof allAffluenti = [];
-  
   for (const aff of allAffluenti) {
-    if (aff.ricorrente && aff.groupId) {
-      if (!groupMap[aff.groupId]) {
-        groupMap[aff.groupId] = [];
-      }
-      groupMap[aff.groupId].push(aff);
-    } else {
-      oneTimeAffluenti.push(aff);
-    }
-  }
-  
-  // Process recurring affluenti groups
-  for (const groupId in groupMap) {
-    const groupAffluenti = groupMap[groupId];
-    if (groupAffluenti.length === 0) continue;
-    
-    const firstAffluente = groupAffluenti[0];
-    const periodicita = firstAffluente.periodicita || 1;
-    const importo = firstAffluente.importo;
-    
-    if (periodicita > 1) {
-      // Find first and last deposit month
-      const mesi = groupAffluenti.map(a => a.mese);
-      const primoApporto = Math.min(...mesi);
-      const ultimoApporto = Math.max(...mesi);
-      
-      // Calculate monthly average
-      const importoMensile = importo / periodicita;
-      
-      // Distribute from (primoApporto - periodicita) to ultimoApporto
-      const meseInizio = primoApporto - periodicita;
-      const meseFine = ultimoApporto;
-      
-      for (let mese = meseInizio; mese <= meseFine; mese++) {
-        if (mese >= 0 && mese < settings.orizzonteTemporale) {
-          monthlyTotals[mese] = (monthlyTotals[mese] || 0) + importoMensile;
-        }
-      }
-    } else {
-      // Monthly recurring: allocate full amount in each month
-      for (const aff of groupAffluenti) {
-        if (aff.mese >= 0 && aff.mese < settings.orizzonteTemporale) {
-          monthlyTotals[aff.mese] = (monthlyTotals[aff.mese] || 0) + aff.importo;
-        }
-      }
-    }
-  }
-  
-  // Process one-time affluenti
-  for (const aff of oneTimeAffluenti) {
-    if (aff.mese >= 0 && aff.mese < settings.orizzonteTemporale) {
+    if (aff.mese >= 0 && aff.mese < orizzonteTemporale) {
       monthlyTotals[aff.mese] = (monthlyTotals[aff.mese] || 0) + aff.importo;
     }
   }
-  
-  // Convert to array format
-  const result = [];
-  for (let mese = 0; mese < settings.orizzonteTemporale; mese++) {
-    result.push({
-      mese,
-      totale: monthlyTotals[mese] || 0,
-    });
-  }
-  
-  return result;
+
+  return Array.from({ length: orizzonteTemporale }, (_, i) => ({
+    mese: i,
+    totale: monthlyTotals[i] || 0,
+  }));
 }
 
 // ============================================================================

@@ -251,7 +251,7 @@ export const appRouter = router({
         fiumeId: z.number().int().positive(),
         importo: z.number().int().positive(),
         meseInizio: z.number().int().min(0).max(240),
-        dataInizio: z.coerce.date().optional(),
+        dataInizio: z.coerce.date(),
         periodicita: z.enum(["mensile", "trimestrale", "semestrale", "annuale"]),
         durataMesi: z.number().int().min(1).max(240),
         descrizione: z.string().optional(),

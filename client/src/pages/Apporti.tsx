@@ -92,23 +92,7 @@ export default function Apporti() {
       utils.affluenti.getBudgetMensile.invalidate();
       utils.calcoli.simulazioneQuinquennale.invalidate();
       utils.calcoli.riepilogo.invalidate();
-      toast.success(`${data.length} affluenti ricorrenti creati con successo`);
-      
-      // Crea alert automatici per affluenti ricorrenti se richiesto
-      if (formData.creaAlert && data.length > 0) {
-        data.forEach((affluente: any) => {
-          if (affluente.dataAffluente) {
-            createAlertMutation.mutate({
-              affluenteId: affluente.id,
-              dataAffluente: new Date(affluente.dataAffluente),
-              importo: affluente.importo,
-              descrizione: affluente.descrizione,
-              giorniPreavviso: parseInt(formData.giorniPreavviso),
-            });
-          }
-        });
-      }
-      
+      toast.success(`${data.count} apport ricorrenti creati con successo`);
       setIsCreateOpen(false);
       resetForm();
     },
@@ -220,12 +204,18 @@ export default function Apporti() {
       toast.error("Inserisci un importo valido");
       return;
     }
-    
-    // Calculate mese from dataAffluente if present, otherwise use formData.mese
-    let mese = parseInt(formData.mese);
-    if (formData.dataAffluente && impostazioni?.dataInizio) {
-      mese = dateToMonthOffset(impostazioni.dataInizio, formData.dataAffluente);
+
+    if (!formData.dataAffluente) {
+      toast.error("Seleziona la data dell'apporto");
+      return;
     }
+
+    if (!impostazioni?.dataInizio) {
+      toast.error("Configura prima la data di inizio piano nelle impostazioni");
+      return;
+    }
+
+    const mese = dateToMonthOffset(impostazioni.dataInizio, formData.dataAffluente);
     
     if (formData.ricorrente) {
       // Crea affluenti ricorrenti
@@ -418,18 +408,22 @@ export default function Apporti() {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="dataAffluente">Data Inizio Programmazione</Label>
+                        <Label htmlFor="dataAffluente">
+                          {formData.ricorrente ? "Data del primo apporto *" : "Data dell'apporto *"}
+                        </Label>
                         <MonthYearPicker
                           value={formData.dataAffluente}
                           onChange={(date) => setFormData({ ...formData, dataAffluente: date })}
-                          placeholder="Seleziona mese inizio"
+                          placeholder="Seleziona mese"
                           minDate={(() => {
                             const selectedFiume = fiumi?.find(f => f.id === selectedFiumeId);
                             return selectedFiume?.dataCreazione ? new Date(selectedFiume.dataCreazione) : (impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date());
                           })()}
                         />
                         <p className="text-xs text-muted-foreground">
-                          Per affluenti ricorrenti, questa è la data di riferimento. Il primo affluente sarà calcolato aggiungendo la periodicità a questa data.
+                          {formData.ricorrente
+                            ? "Il primo apporto verrà inserito in questo mese. I successivi seguiranno la periodicità indicata."
+                            : "Mese in cui l'apporto entra nel capitale del fiume."}
                         </p>
                       </div>
                       <div className="grid gap-2">
@@ -520,17 +514,13 @@ export default function Apporti() {
                                 {(() => {
                                   const periodicityMonths = formData.periodicita === "mensile" ? 1 : formData.periodicita === "trimestrale" ? 3 : formData.periodicita === "semestrale" ? 6 : 12;
                                   const durataMesi = parseInt(formData.durataMesi || "12");
-                                  const meseInizio = parseInt(formData.mese || "1");
-                                  // Simulate backend logic: count only affluenti within plan duration
-                                  let count = 0;
-                                  for (let i = 1; i <= Math.floor(durataMesi / periodicityMonths) + 1; i++) {
-                                    const mese = meseInizio + (i * periodicityMonths);
-                                    // Use >= to match backend logic (exclude affluenti at or beyond plan end)
-                                    if (mese >= meseInizio + durataMesi) break;
-                                    count++;
-                                  }
+                                  // Esattamente floor(durataMesi / periodicita) apport, a partire dal mese indicato
+                                  const count = Math.floor(durataMesi / periodicityMonths);
                                   const importo = parseFloat(formData.importo || "0");
-                                  return `${count} affluenti da ${formatCurrency(importo)} = ${formatCurrency(count * importo)} totale`;
+                                  const dataInizio = formData.dataAffluente;
+                                  const periodoLabel = formData.periodicita === "mensile" ? "mensili" : formData.periodicita === "trimestrale" ? "trimestrali" : formData.periodicita === "semestrale" ? "semestrali" : "annuali";
+                                  const dal = dataInizio ? dataInizio.toLocaleDateString("it-IT", { month: "long", year: "numeric" }) : "—";
+                                  return `${count} apport ${periodoLabel} da ${formatCurrency(importo)} = ${formatCurrency(count * importo)} totale${dataInizio ? `, a partire da ${dal}` : ""}`;
                                 })()}
                               </p>
                             </div>
