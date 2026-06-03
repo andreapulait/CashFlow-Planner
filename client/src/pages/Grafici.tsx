@@ -115,8 +115,8 @@ export default function Grafici() {
       const primoMese = fiume.mesi[0];
       const ultimoMese = fiume.mesi[fiume.mesi.length - 1];
       
-      const valoreIniziale = fiumeInfo?.sorgente || 0;
-      const valoreFinale = ultimoMese?.valore || 0;
+      const valoreIniziale = fiumeInfo?.sorgente || 0; // centesimi
+      const valoreFinale = Math.round((ultimoMese?.valore || 0) * 100); // euro → centesimi
       const roi = valoreIniziale > 0 ? ((valoreFinale - valoreIniziale) / valoreIniziale) * 100 : 0;
       
       return {
