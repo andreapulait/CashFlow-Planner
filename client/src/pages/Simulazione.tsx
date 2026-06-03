@@ -30,7 +30,19 @@ function meseToAnno(mese: number, dataInizio: Date): number {
 
 export default function Simulazione() {
   const [filter, setFilter] = useState<DateFilter>({ type: "all" });
+  // Stato expand riepilogo (chiave = anno)
   const [anniEspansi, setAnniEspansi] = useState<Set<number>>(new Set());
+  // Stato expand per-fiume (chiave = `${fiumeId}-${anno}`)
+  const [anniFiumeEspansi, setAnniFiumeEspansi] = useState<Set<string>>(new Set());
+
+  const toggleAnnoFiume = (fiumeId: number, anno: number) => {
+    const key = `${fiumeId}-${anno}`;
+    setAnniFiumeEspansi(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
 
   const { data: simulazione, isLoading } = trpc.calcoli.simulazioneQuinquennale.useQuery({});
   const { data: impostazioni } = trpc.impostazioni.get.useQuery();
@@ -282,60 +294,129 @@ export default function Simulazione() {
 
         {/* Tabelle dettagliate per fiume */}
         <div className="space-y-6">
-          {simulazione.map(fiume => (
-            <Card key={fiume.fiumeId}>
-              <CardHeader>
-                <CardTitle>{fiume.nome}</CardTitle>
-                <CardDescription>
-                  Capitale sorgente: {formatCurrency(fiume.sorgente)} · Rendimento: {fiume.rendimento.toFixed(2)}%
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Mese</TableHead>
-                      <TableHead className="text-right">Valore</TableHead>
-                      <TableHead className="text-right">Apporto</TableHead>
-                      <TableHead className="text-right">Reinv. Uscita</TableHead>
-                      <TableHead className="text-right">Reinv. Entrata</TableHead>
-                      <TableHead className="text-right">Cash Flow</TableHead>
-                      <TableHead className="text-right text-muted-foreground">Prelevabile</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getMesi().map(m => {
-                      const d = fiume.mesi.find(x => x.mese === m);
-                      if (!d) return null;
-                      return (
-                        <TableRow key={m}>
-                          <TableCell className="font-medium">
-                            {formatMonthOffset(m, impostazioni?.dataInizio)}
-                          </TableCell>
-                          <TableCell className="text-right">{formatCurrency(d.valore)}</TableCell>
-                          <TableCell className="text-right text-blue-600">
-                            {(d.affluenteMese || 0) > 0 ? formatCurrency(d.affluenteMese || 0) : "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-red-600">
-                            {d.reinvestimentoUscita ? `-${formatCurrency(d.reinvestimentoUscita)}` : "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-green-600">
-                            {d.reinvestimentoEntrata ? `+${formatCurrency(d.reinvestimentoEntrata)}` : "—"}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-primary">
-                            {formatCurrency(d.rendita)}
-                          </TableCell>
-                          <TableCell className="text-right text-sm text-muted-foreground">
-                            {d.cashFlowMensile > 0 ? formatCurrency(d.cashFlowMensile) : "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          ))}
+          {simulazione.map(fiume => {
+            // Raggruppa i mesi filtrati per anno per questo fiume
+            const mesiPerAnnoFiume = mesiPerAnno.map(({ anno, mesi: mesiAnno }) => {
+              const mesiConDati = mesiAnno.filter(m => fiume.mesi.some(x => x.mese === m));
+              return { anno, mesi: mesiConDati };
+            }).filter(g => g.mesi.length > 0);
+
+            return (
+              <Card key={fiume.fiumeId}>
+                <CardHeader>
+                  <CardTitle>{fiume.nome}</CardTitle>
+                  <CardDescription>
+                    Capitale sorgente: {formatCurrency(fiume.sorgente)} · Rendimento: {fiume.rendimento.toFixed(2)}%
+                    {" · "}Clicca su un anno per espandere i mesi
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-48">Periodo</TableHead>
+                        <TableHead className="text-right">Valore</TableHead>
+                        <TableHead className="text-right">Apporti</TableHead>
+                        <TableHead className="text-right">Reinv. Uscita</TableHead>
+                        <TableHead className="text-right">Reinv. Entrata</TableHead>
+                        <TableHead className="text-right">Cash Flow</TableHead>
+                        <TableHead className="text-right text-muted-foreground">Prelevabile</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {mesiPerAnnoFiume.map(({ anno, mesi: mesiAnno }) => {
+                        const key = `${fiume.fiumeId}-${anno}`;
+                        const espanso = anniFiumeEspansi.has(key);
+
+                        // Aggregati anno per questo fiume
+                        let valoreAnno = 0, apportiAnno = 0, reinvUscitaAnno = 0;
+                        let reinvEntrataAnno = 0, cashFlowAnno = 0, prelevabileAnno = 0;
+                        mesiAnno.forEach(m => {
+                          const d = fiume.mesi.find(x => x.mese === m);
+                          if (!d) return;
+                          valoreAnno       = d.valore; // ultimo mese = valore finale
+                          apportiAnno     += d.affluenteMese || 0;
+                          reinvUscitaAnno += d.reinvestimentoUscita || 0;
+                          reinvEntrataAnno += d.reinvestimentoEntrata || 0;
+                          cashFlowAnno    += d.rendita;
+                          prelevabileAnno += d.cashFlowMensile || 0;
+                        });
+
+                        return (
+                          <>
+                            {/* Riga anno */}
+                            <TableRow
+                              key={`anno-${key}`}
+                              className="cursor-pointer bg-muted/40 hover:bg-muted/70"
+                              onClick={() => toggleAnnoFiume(fiume.fiumeId, anno)}
+                            >
+                              <TableCell className="flex items-center gap-2 py-3">
+                                {espanso
+                                  ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                }
+                                <span className="font-semibold">{anno}</span>
+                                <span className="text-xs text-muted-foreground font-normal">
+                                  ({mesiAnno.length} {mesiAnno.length === 1 ? "mese" : "mesi"})
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {formatCurrency(valoreAnno)}
+                              </TableCell>
+                              <TableCell className="text-right text-blue-600">
+                                {apportiAnno > 0 ? formatCurrency(apportiAnno) : <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                              <TableCell className="text-right text-red-600">
+                                {reinvUscitaAnno > 0 ? `-${formatCurrency(reinvUscitaAnno)}` : <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                              <TableCell className="text-right text-green-600">
+                                {reinvEntrataAnno > 0 ? `+${formatCurrency(reinvEntrataAnno)}` : <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-primary">
+                                {formatCurrency(cashFlowAnno)}
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">
+                                {prelevabileAnno > 0 ? formatCurrency(prelevabileAnno) : <span>—</span>}
+                              </TableCell>
+                            </TableRow>
+
+                            {/* Righe mesi */}
+                            {espanso && mesiAnno.map(m => {
+                              const d = fiume.mesi.find(x => x.mese === m);
+                              if (!d) return null;
+                              return (
+                                <TableRow key={m} className="bg-background hover:bg-muted/20">
+                                  <TableCell className="pl-10 text-sm text-muted-foreground">
+                                    {formatMonthOffset(m, impostazioni?.dataInizio)}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm">{formatCurrency(d.valore)}</TableCell>
+                                  <TableCell className="text-right text-sm text-blue-600">
+                                    {(d.affluenteMese || 0) > 0 ? formatCurrency(d.affluenteMese || 0) : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm text-red-600">
+                                    {d.reinvestimentoUscita ? `-${formatCurrency(d.reinvestimentoUscita)}` : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm text-green-600">
+                                    {d.reinvestimentoEntrata ? `+${formatCurrency(d.reinvestimentoEntrata)}` : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm font-semibold text-primary">
+                                    {formatCurrency(d.rendita)}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm text-muted-foreground">
+                                    {d.cashFlowMensile > 0 ? formatCurrency(d.cashFlowMensile) : "—"}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </div>
