@@ -204,16 +204,8 @@ export async function createAffluentiRicorrenti(params: {
   descrizione?: string | null;
   periodicita: number; // 1=monthly, 3=quarterly, 6=semestral, 12=annual
   durataMesi: number; // duration in months
+  orizzonteTemporale?: number; // se fornito, gli apport oltre questo mese vengono esclusi
 }) {
-  console.log('[createAffluentiRicorrenti] Input params:', {
-    fiumeId: params.fiumeId,
-    importo: params.importo,
-    meseInizio: params.meseInizio,
-    dataAffluente: params.dataAffluente?.toISOString(),
-    periodicita: params.periodicita,
-    durataMesi: params.durataMesi
-  });
-  
   const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const affluentiToCreate = [];
 
@@ -221,9 +213,19 @@ export async function createAffluentiRicorrenti(params: {
   const baseDate = params.dataAffluente || new Date();
 
   // Il primo apporto parte esattamente a meseInizio.
-  // Il numero di apport è floor(durataMesi / periodicita).
-  // Esempio: meseInizio=5 (giugno), periodicita=1, durataMesi=10 → apport ai mesi 5,6,7,8,9,10,11,12,13,14 (10 apport)
-  const numApporti = Math.floor(params.durataMesi / params.periodicita);
+  // Il numero di apport richiesti è floor(durataMesi / periodicita).
+  const numRichiesti = Math.floor(params.durataMesi / params.periodicita);
+
+  // Se è fornito l'orizzonte temporale, calcola quanti apport rientrano nel piano.
+  // L'ultimo apport valido è il più grande i tale che meseInizio + i*periodicita <= orizzonteTemporale.
+  const numNelPiano = params.orizzonteTemporale !== undefined
+    ? params.meseInizio <= params.orizzonteTemporale
+      ? Math.floor((params.orizzonteTemporale - params.meseInizio) / params.periodicita) + 1
+      : 0
+    : numRichiesti;
+
+  const numApporti = Math.min(numRichiesti, numNelPiano);
+  const esclusi = numRichiesti - numApporti;
 
   for (let i = 0; i < numApporti; i++) {
     const currentMese = params.meseInizio + (i * params.periodicita);
@@ -249,7 +251,7 @@ export async function createAffluentiRicorrenti(params: {
     await db.insert(affluenti).values(affluentiToCreate);
   }
   
-  return { count: affluentiToCreate.length, groupId };
+  return { count: affluentiToCreate.length, groupId, esclusi };
 }
 
 export async function updateAffluente(

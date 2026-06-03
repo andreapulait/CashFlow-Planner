@@ -92,7 +92,13 @@ export default function Apporti() {
       utils.affluenti.getBudgetMensile.invalidate();
       utils.calcoli.simulazioneQuinquennale.invalidate();
       utils.calcoli.riepilogo.invalidate();
-      toast.success(`${data.count} apport ricorrenti creati con successo`);
+      if (data.esclusi > 0) {
+        toast.success(`${data.count} apport creati`, {
+          description: `${data.esclusi} apport esclusi perché oltre la fine del piano.`,
+        });
+      } else {
+        toast.success(`${data.count} apport ricorrenti creati con successo`);
+      }
       setIsCreateOpen(false);
       resetForm();
     },
@@ -508,22 +514,46 @@ export default function Apporti() {
                                 }
                               </p>
                             </div>
-                            <div className="bg-muted/50 p-3 rounded-md text-sm">
-                              <p className="font-medium">Anteprima:</p>
-                              <p className="text-muted-foreground">
-                                {(() => {
-                                  const periodicityMonths = formData.periodicita === "mensile" ? 1 : formData.periodicita === "trimestrale" ? 3 : formData.periodicita === "semestrale" ? 6 : 12;
-                                  const durataMesi = parseInt(formData.durataMesi || "12");
-                                  // Esattamente floor(durataMesi / periodicita) apport, a partire dal mese indicato
-                                  const count = Math.floor(durataMesi / periodicityMonths);
-                                  const importo = parseFloat(formData.importo || "0");
-                                  const dataInizio = formData.dataAffluente;
-                                  const periodoLabel = formData.periodicita === "mensile" ? "mensili" : formData.periodicita === "trimestrale" ? "trimestrali" : formData.periodicita === "semestrale" ? "semestrali" : "annuali";
-                                  const dal = dataInizio ? dataInizio.toLocaleDateString("it-IT", { month: "long", year: "numeric" }) : "—";
-                                  return `${count} apport ${periodoLabel} da ${formatCurrency(importo)} = ${formatCurrency(count * importo)} totale${dataInizio ? `, a partire da ${dal}` : ""}`;
-                                })()}
-                              </p>
-                            </div>
+                            {(() => {
+                              const periodicityMonths = formData.periodicita === "mensile" ? 1 : formData.periodicita === "trimestrale" ? 3 : formData.periodicita === "semestrale" ? 6 : 12;
+                              const durataMesi = parseInt(formData.durataMesi || "12");
+                              const numRichiesti = Math.floor(durataMesi / periodicityMonths);
+                              const importo = parseFloat(formData.importo || "0");
+                              const periodoLabel = formData.periodicita === "mensile" ? "mensili" : formData.periodicita === "trimestrale" ? "trimestrali" : formData.periodicita === "semestrale" ? "semestrali" : "annuali";
+                              const dataInizio = formData.dataAffluente;
+                              const dal = dataInizio ? dataInizio.toLocaleDateString("it-IT", { month: "long", year: "numeric" }) : null;
+
+                              // Calcola quanti rientrano nel piano
+                              const orizzonteTemporale = impostazioni?.orizzonteTemporale ?? 60;
+                              const meseInizio = (dataInizio && impostazioni?.dataInizio)
+                                ? dateToMonthOffset(impostazioni.dataInizio, dataInizio)
+                                : 0;
+                              const numNelPiano = meseInizio <= orizzonteTemporale
+                                ? Math.floor((orizzonteTemporale - meseInizio) / periodicityMonths) + 1
+                                : 0;
+                              const countEffettivo = Math.min(numRichiesti, numNelPiano);
+                              const esclusi = numRichiesti - countEffettivo;
+
+                              return (
+                                <div className="space-y-2">
+                                  <div className="bg-muted/50 p-3 rounded-md text-sm">
+                                    <p className="font-medium">Anteprima:</p>
+                                    <p className="text-muted-foreground">
+                                      {countEffettivo} apport {periodoLabel} da {formatCurrency(importo)} = {formatCurrency(countEffettivo * importo)} totale
+                                      {dal ? `, a partire da ${dal}` : ""}
+                                    </p>
+                                  </div>
+                                  {esclusi > 0 && (
+                                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-md text-sm text-amber-800">
+                                      <p className="font-medium">⚠ {esclusi} apport {esclusi === 1 ? "va" : "vanno"} oltre la fine del piano</p>
+                                      <p className="mt-0.5 text-amber-700">
+                                        Verranno esclusi automaticamente. Per includerli, estendi l'orizzonte temporale nelle impostazioni.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>

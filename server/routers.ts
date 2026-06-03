@@ -256,23 +256,25 @@ export const appRouter = router({
         durataMesi: z.number().int().min(1).max(240),
         descrizione: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
-        // Convert periodicita from string to number
+      .mutation(async ({ input, ctx }) => {
         const periodicityMap = {
           mensile: 1,
           trimestrale: 3,
           semestrale: 6,
           annuale: 12,
         };
-        
+
+        const impostazioni = await db.getImpostazioniByUserId(ctx.user.id);
+
         return db.createAffluentiRicorrenti({
           fiumeId: input.fiumeId,
           importo: input.importo,
           meseInizio: input.meseInizio,
-          dataAffluente: input.dataInizio, // Fix parameter name
-          periodicita: periodicityMap[input.periodicita], // Convert to number
+          dataAffluente: input.dataInizio,
+          periodicita: periodicityMap[input.periodicita],
           durataMesi: input.durataMesi,
           descrizione: input.descrizione,
+          orizzonteTemporale: impostazioni.orizzonteTemporale,
         });
       }),
     
