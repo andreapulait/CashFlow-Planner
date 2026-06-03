@@ -45,10 +45,10 @@ export function FiumiComparisonChart({ fiumi, title = "Confronto Performance Fiu
         <div className="bg-background border border-border rounded-lg shadow-lg p-4">
           <p className="font-semibold text-foreground mb-2">{fiume?.nome || label}</p>
           <p className="text-sm text-muted-foreground">
-            Valore Iniziale: {formatCurrency(payload[0]?.value || 0)}
+            Valore Finale: {formatCurrency(payload[0]?.value || 0)}
           </p>
           <p className="text-sm text-muted-foreground">
-            Valore Finale: {formatCurrency(payload[1]?.value || 0)}
+            Valore Iniziale: {formatCurrency(payload[1]?.value || 0)}
           </p>
           {fiume && (
             <>

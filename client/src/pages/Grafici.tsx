@@ -50,7 +50,7 @@ export default function Grafici() {
         }
       });
       
-      data.push({ mese, valore, rendita, apporti });
+      data.push({ mese, valore: Math.round(valore * 100), rendita, apporti });
     }
     
     return data;
@@ -226,6 +226,7 @@ export default function Grafici() {
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="valore"
+                    nameKey="nome"
                   >
                     {composizioneData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
