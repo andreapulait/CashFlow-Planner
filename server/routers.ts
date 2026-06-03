@@ -489,15 +489,15 @@ export const appRouter = router({
             const rendimentoMensileDecimale = Math.pow(1 + rendimentoAnnualeDecimale, 1/12) - 1;
             const meseInizio = fiume.meseCreazione;
             
-            if (mese === 0) {
-              // Mese 0: capitale iniziale
-              const affluentiMap = affluentiByFiume.get(fiumeId) || new Map();
-              stateMap.set(0, sorgenteEuro + (affluentiMap.get(0) || 0));
-              continue;
-            }
-            
             if (mese < meseInizio) {
               stateMap.set(mese, 0);
+              continue;
+            }
+
+            if (mese === meseInizio) {
+              // Mese di creazione: capitale iniziale, nessun interesse ancora
+              const affluentiMap = affluentiByFiume.get(fiumeId) || new Map();
+              stateMap.set(mese, sorgenteEuro + (affluentiMap.get(mese) || 0));
               continue;
             }
             
@@ -776,28 +776,22 @@ export const appRouter = router({
             affluentiMap.set(a.mese, existing + (a.importo / 100));
           });
           
-          let capitaleAccumulato = 0;
+          const percentualeReinv = fiume.percentualeReinvestimento != null ? fiume.percentualeReinvestimento : 100;
+
+          // Capitale al meseCreazione: sorgente + eventuali affluenti, senza maturare interessi in quel mese
+          let capitaleAccumulato = sorgenteEuro + (affluentiMap.get(meseInizio) || 0);
           let renditaUltimoMese = 0;
-          
-          // Itera mese per mese
-          for (let mese = 0; mese <= orizzonteTemporale; mese++) {
-            if (mese === meseInizio) {
-              // Aggiungi la sorgente al mese di creazione
-              capitaleAccumulato += sorgenteEuro;
-            }
-            
-            if (mese >= meseInizio) {
-              // Aggiungi affluente se presente in questo mese
-              const affluenteMese = affluentiMap.get(mese) || 0;
-              capitaleAccumulato += affluenteMese;
-              
-              // Calcola rendita mensile
-              const rendita = capitaleAccumulato * rendimentoMensileDecimale;
-              capitaleAccumulato += rendita;
-              
-              if (mese === orizzonteTemporale) {
-                renditaUltimoMese = rendita;
-              }
+
+          for (let mese = meseInizio + 1; mese <= orizzonteTemporale; mese++) {
+            const affluenteMese = affluentiMap.get(mese) || 0;
+            capitaleAccumulato += affluenteMese;
+
+            const rendita = capitaleAccumulato * rendimentoMensileDecimale;
+            const importoReinvestito = rendita * (percentualeReinv / 100);
+            capitaleAccumulato += importoReinvestito;
+
+            if (mese === orizzonteTemporale) {
+              renditaUltimoMese = rendita;
             }
           }
           
@@ -908,7 +902,7 @@ export const appRouter = router({
         for (const fiume of allFiumi) {
           const sorgenteEuro = fiume.sorgente / 100;
           const rendimentoAnnualeDecimale = fiume.rendimento / 10000;
-          const rendimentoMensileDecimale = rendimentoAnnualeDecimale / 12; // Tasso nominale annuo diviso 12
+          const rendimentoMensileDecimale = Math.pow(1 + rendimentoAnnualeDecimale, 1/12) - 1;
           const meseInizio = fiume.meseCreazione;
           
           if (mese >= meseInizio) {
