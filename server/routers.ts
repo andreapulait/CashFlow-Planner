@@ -5,6 +5,120 @@ import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 
+// ============================================================================
+// SIMULAZIONE PORTAFOGLIO — helper condiviso da riepilogo, evoluzionePatrimonio
+// e flussiReinvestimenti. Simula mese per mese tutti i fiumi dell'utente
+// applicando rendite, affluenti e reinvestimenti esplicitamente.
+// ============================================================================
+async function runSimulazione(userId: number, orizzonteTemporale: number) {
+  const allFiumi = await db.getFiumiByUserId(userId);
+  const reinvestimentiData = await db.getReinvestimentiByUserId(userId);
+
+  // Carica affluenti per ogni fiume
+  const affluentiByFiume = new Map<number, Map<number, number>>();
+  for (const fiume of allFiumi) {
+    const aff = await db.getAffluentiByFiumeId(fiume.id);
+    const affMap = new Map<number, number>();
+    aff.forEach(a => { affMap.set(a.mese, (affMap.get(a.mese) || 0) + a.importo / 100); });
+    affluentiByFiume.set(fiume.id, affMap);
+  }
+
+  // Reinvestimenti raggruppati per mese
+  const reinvestimentiByMese = new Map<number, typeof reinvestimentiData>();
+  reinvestimentiData.forEach(r => {
+    const mese = r.reinvestimento.meseReinvestimento;
+    if (!reinvestimentiByMese.has(mese)) reinvestimentiByMese.set(mese, []);
+    reinvestimentiByMese.get(mese)!.push(r);
+  });
+
+  // Stato capitale e rendita per ogni fiume (inclusi nuoviFiumi da reinvestimento)
+  const fiumiStates = new Map<number, Map<number, number>>();
+  const fiumiRendite = new Map<number, Map<number, number>>();
+  const fiumiInfo = new Map<number, { nome: string; rendimento: number; meseCreazione: number; sorgente: number; percentualeReinvestimento: number | null }>();
+  let nextTempId = -1;
+
+  allFiumi.forEach(f => {
+    fiumiStates.set(f.id, new Map());
+    fiumiRendite.set(f.id, new Map());
+    fiumiInfo.set(f.id, {
+      nome: f.nome,
+      rendimento: f.rendimento,
+      meseCreazione: f.meseCreazione,
+      sorgente: f.sorgente,
+      percentualeReinvestimento: f.percentualeReinvestimento ?? null,
+    });
+  });
+
+  for (let mese = 0; mese <= orizzonteTemporale; mese++) {
+    // Passo 1: calcola capitale e rendita per ogni fiume
+    for (const [fiumeId, stateMap] of Array.from(fiumiStates.entries())) {
+      const info = fiumiInfo.get(fiumeId);
+      if (!info) continue;
+
+      const rendimentoMensile = Math.pow(1 + info.rendimento / 10000, 1 / 12) - 1;
+      const percentualeReinv = info.percentualeReinvestimento ?? 100;
+      const affMap = affluentiByFiume.get(fiumeId) || new Map();
+
+      if (mese < info.meseCreazione) {
+        stateMap.set(mese, 0);
+        fiumiRendite.get(fiumeId)!.set(mese, 0);
+        continue;
+      }
+
+      if (mese === info.meseCreazione) {
+        stateMap.set(mese, info.sorgente / 100 + (affMap.get(mese) || 0));
+        fiumiRendite.get(fiumeId)!.set(mese, 0);
+        continue;
+      }
+
+      const capPrec = stateMap.get(mese - 1) || 0;
+      const rendita = capPrec * rendimentoMensile;
+      const reinvestito = rendita * (percentualeReinv / 100);
+      stateMap.set(mese, capPrec + reinvestito + (affMap.get(mese) || 0));
+      fiumiRendite.get(fiumeId)!.set(mese, rendita);
+    }
+
+    // Passo 2: applica reinvestimenti espliciti del mese
+    for (const rw of (reinvestimentiByMese.get(mese) || [])) {
+      const r = rw.reinvestimento;
+      const srcState = fiumiStates.get(r.fiumeOrigineId);
+      if (!srcState) continue;
+
+      const capSrc = srcState.get(mese) || 0;
+      let importo = r.importoFisso
+        ? r.importoFisso / 100
+        : r.percentuale
+          ? capSrc * (r.percentuale / 10000)
+          : 0;
+      importo = Math.min(importo, Math.max(0, capSrc)); // no capitale negativo
+
+      srcState.set(mese, capSrc - importo);
+
+      if (r.fiumeDestinazioneId) {
+        const dstState = fiumiStates.get(r.fiumeDestinazioneId);
+        if (dstState) dstState.set(mese, (dstState.get(mese) || 0) + importo);
+      } else if (r.nuovoFiumeNome && r.nuovoFiumeRendimento != null) {
+        // Crea fiume temporaneo per tracciare il capitale trasferito
+        const tempId = nextTempId--;
+        fiumiInfo.set(tempId, {
+          nome: r.nuovoFiumeNome,
+          rendimento: r.nuovoFiumeRendimento,
+          meseCreazione: mese,
+          sorgente: 0,
+          percentualeReinvestimento: 100,
+        });
+        const newState = new Map<number, number>();
+        newState.set(mese, importo);
+        fiumiStates.set(tempId, newState);
+        fiumiRendite.set(tempId, new Map([[mese, 0]]));
+        affluentiByFiume.set(tempId, new Map());
+      }
+    }
+  }
+
+  return { fiumiStates, fiumiRendite, fiumiInfo, allFiumi, affluentiByFiume, reinvestimentiByMese };
+}
+
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -199,17 +313,17 @@ export const appRouter = router({
         nuovoFiumeRendimento: z.number().int().min(0).max(10000).optional(),
         descrizione: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { id, ...updates } = input;
-        return db.updateReinvestimento(id, updates);
+        return db.updateReinvestimento(id, ctx.user.id, updates);
       }),
-    
+
     delete: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        await db.deleteReinvestimento(input.id);
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteReinvestimento(input.id, ctx.user.id);
         return { success: true };
       }),
   }),
@@ -287,18 +401,18 @@ export const appRouter = router({
         dataAffluente: z.date().optional(),
         descrizione: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { id, fiumeId, ...updates } = input;
-        return db.updateAffluente(id, updates);
+      .mutation(async ({ input, ctx }) => {
+        const { id, fiumeId: _fiumeId, ...updates } = input;
+        return db.updateAffluente(id, ctx.user.id, updates);
       }),
-    
+
     delete: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
         fiumeId: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        await db.deleteAffluente(input.id);
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteAffluente(input.id, ctx.user.id);
         return { success: true };
       }),
     
@@ -316,11 +430,11 @@ export const appRouter = router({
         groupId: z.string(),
         fiumeId: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        const deleted = await db.deleteAffluentiGroup(input.groupId);
-        return { success: true, count: deleted };
+      .mutation(async ({ input, ctx }) => {
+        const result = await db.deleteAffluentiGroup(input.groupId, ctx.user.id);
+        return { success: true, count: result.count };
       }),
-    
+
     updateGroup: protectedProcedure
       .input(z.object({
         groupId: z.string(),
@@ -331,10 +445,9 @@ export const appRouter = router({
         durataMesi: z.number().int().positive().optional(),
         dataInizio: z.coerce.date().optional(),
       }))
-      .mutation(async ({ input }) => {
-        const { groupId, fiumeId, periodicita, ...otherUpdates } = input;
-        
-        // Convert periodicita string to number
+      .mutation(async ({ input, ctx }) => {
+        const { groupId, fiumeId: _fiumeId, periodicita, ...otherUpdates } = input;
+
         const updates: any = { ...otherUpdates };
         if (periodicita) {
           const periodicityMap: Record<string, number> = {
@@ -345,8 +458,8 @@ export const appRouter = router({
           };
           updates.periodicita = periodicityMap[periodicita];
         }
-        
-        const updated = await db.updateAffluentiGroup(groupId, updates);
+
+        const updated = await db.updateAffluentiGroup(groupId, ctx.user.id, updates);
         return { success: true, count: updated };
       }),
     
@@ -433,7 +546,7 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
-  
+
   calcoli: router({
     simulazioneQuinquennale: protectedProcedure
       .input(z.object({
@@ -542,7 +655,8 @@ export const appRouter = router({
               importoReinvestimento = capitaleSorgente * (reinv.percentuale / 10000);
             }
 
-            // Subtract from source
+            // Subtract from source (floor a 0: il capitale non può essere negativo)
+            importoReinvestimento = Math.min(importoReinvestimento, Math.max(0, capitaleSorgente));
             sorgenteState.set(mese, capitaleSorgente - importoReinvestimento);
 
             // Add to destination
@@ -655,12 +769,17 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const fiumi = await db.getFiumiByUserId(ctx.user.id);
         const reinvestimenti = await db.getReinvestimentiByUserId(ctx.user.id);
+        const impostazioni = await db.getImpostazioniByUserId(ctx.user.id);
         const affluenti = [];
-        
+
         for (const fiume of fiumi) {
           const fiumeAffluenti = await db.getAffluentiByFiumeId(fiume.id);
           affluenti.push(...fiumeAffluenti.map(a => ({ ...a, fiumeId: fiume.id })));
         }
+
+        // Esegui simulazione per calcolare il capitale di ogni fiume ad ogni mese
+        // (necessario per convertire le percentuali reinvestimento in importi reali)
+        const { fiumiStates } = await runSimulazione(ctx.user.id, impostazioni.orizzonteTemporale);
         
         // Build nodes and links for Sankey diagram
         const nodes: Array<{ id: string; label: string; type: string }> = [];
@@ -735,9 +854,9 @@ export const appRouter = router({
             if (r.importoFisso) {
               value = r.importoFisso / 100;
             } else if (r.percentuale) {
-              // For percentage, we need to calculate based on fiume value at that year
-              // This is approximate - we'll use a placeholder
-              value = 0; // Will be calculated in frontend if needed
+              // Usa il capitale simulato della sorgente al mese del reinvestimento
+              const capSorgente = fiumiStates.get(r.fiumeOrigineId)?.get(r.meseReinvestimento) || 0;
+              value = capSorgente * (r.percentuale / 10000);
             } else {
               return;
             }
@@ -759,56 +878,24 @@ export const appRouter = router({
       }),
     
     riepilogo: protectedProcedure.query(async ({ ctx }) => {
-      const allFiumi = await db.getFiumiByUserId(ctx.user.id);
       const impostazioni = await db.getImpostazioniByUserId(ctx.user.id);
       const orizzonteTemporale = impostazioni.orizzonteTemporale;
       const obiettivoEuro = impostazioni.obiettivoMensile / 100;
-      
+
+      const { fiumiStates, fiumiRendite, allFiumi } = await runSimulazione(ctx.user.id, orizzonteTemporale);
+
       let capitaleTotale = 0;
       let cashFlowMensileUltimoMese = 0;
-      
-      await Promise.all(allFiumi.map(async fiume => {
-        const sorgenteEuro = fiume.sorgente / 100;
-        const rendimentoAnnualeDecimale = fiume.rendimento / 10000;
-        // Formula corretta per tasso composto mensile: (1 + r_annuale)^(1/12) - 1
-        const rendimentoMensileDecimale = Math.pow(1 + rendimentoAnnualeDecimale, 1/12) - 1;
-        const meseInizio = fiume.meseCreazione;
-        
-        if (orizzonteTemporale >= meseInizio) {
-          // Carica gli affluenti per questo fiume
-          const affluenti = await db.getAffluentiByFiumeId(fiume.id);
-          const affluentiMap = new Map<number, number>();
-          affluenti.forEach(a => {
-            const existing = affluentiMap.get(a.mese) || 0;
-            affluentiMap.set(a.mese, existing + (a.importo / 100));
-          });
-          
-          const percentualeReinv = fiume.percentualeReinvestimento != null ? fiume.percentualeReinvestimento : 100;
 
-          // Capitale al meseCreazione: sorgente + eventuali affluenti, senza maturare interessi in quel mese
-          let capitaleAccumulato = sorgenteEuro + (affluentiMap.get(meseInizio) || 0);
-          let renditaUltimoMese = 0;
+      for (const [, stateMap] of Array.from(fiumiStates.entries())) {
+        capitaleTotale += stateMap.get(orizzonteTemporale) || 0;
+      }
+      for (const [, renditeMap] of Array.from(fiumiRendite.entries())) {
+        cashFlowMensileUltimoMese += renditeMap.get(orizzonteTemporale) || 0;
+      }
 
-          for (let mese = meseInizio + 1; mese <= orizzonteTemporale; mese++) {
-            const affluenteMese = affluentiMap.get(mese) || 0;
-            capitaleAccumulato += affluenteMese;
-
-            const rendita = capitaleAccumulato * rendimentoMensileDecimale;
-            const importoReinvestito = rendita * (percentualeReinv / 100);
-            capitaleAccumulato += importoReinvestito;
-
-            if (mese === orizzonteTemporale) {
-              renditaUltimoMese = rendita;
-            }
-          }
-          
-          capitaleTotale += capitaleAccumulato;
-          cashFlowMensileUltimoMese += renditaUltimoMese;
-        }
-      }));
-      
       const percentualeRaggiunta = obiettivoEuro > 0 ? (cashFlowMensileUltimoMese / obiettivoEuro) * 100 : 0;
-      
+
       return {
         numeroFiumi: allFiumi.length,
         capitaleTotale: Math.round(capitaleTotale * 100) / 100,
@@ -883,73 +970,39 @@ export const appRouter = router({
     
     // Evoluzione patrimonio mese per mese (per grafico Analytics)
     evoluzionePatrimonio: protectedProcedure.query(async ({ ctx }) => {
-      const allFiumi = await db.getFiumiByUserId(ctx.user.id);
       const impostazioni = await db.getImpostazioniByUserId(ctx.user.id);
       const orizzonteTemporale = impostazioni.orizzonteTemporale;
-      
-      // Array per memorizzare i dati mese per mese
+
+      const { fiumiStates, fiumiRendite, fiumiInfo, allFiumi, affluentiByFiume } =
+        await runSimulazione(ctx.user.id, orizzonteTemporale);
+
       const evoluzione: Array<{ mese: number; valore: number; rendita: number; apporti: number }> = [];
-      
-      // Mappa per tracciare il capitale di ogni fiume mese per mese
-      const capitaliPerFiume = new Map<number, number>();
-      
-      // Carica tutti gli affluenti in anticipo per evitare query ripetute
-      const affluentiMap = new Map<number, Array<any>>();
-      for (const fiume of allFiumi) {
-        const affluenti = await db.getAffluentiByFiumeId(fiume.id);
-        affluentiMap.set(fiume.id, affluenti);
-      }
-      
+
       for (let mese = 0; mese <= orizzonteTemporale; mese++) {
         let valoreTotale = 0;
         let renditaTotale = 0;
         let apportiTotale = 0;
-        
-        // Calcola rendite e applica affluenti per ogni fiume
-        for (const fiume of allFiumi) {
-          const sorgenteEuro = fiume.sorgente / 100;
-          const rendimentoAnnualeDecimale = fiume.rendimento / 10000;
-          const rendimentoMensileDecimale = Math.pow(1 + rendimentoAnnualeDecimale, 1/12) - 1;
-          const meseInizio = fiume.meseCreazione;
-          
-          if (mese >= meseInizio) {
-            let capitaleCorrente = capitaliPerFiume.get(fiume.id) || 0;
-            
-            // Al mese di creazione, aggiungi la sorgente
-            if (mese === meseInizio) {
-              capitaleCorrente += sorgenteEuro;
-              apportiTotale += sorgenteEuro;
-            }
-            
-            // Aggiungi affluenti se presenti
-            const affluenti = affluentiMap.get(fiume.id) || [];
-            const affluenteMese = affluenti.find(a => a.mese === mese);
-            if (affluenteMese) {
-              const importoEuro = affluenteMese.importo / 100;
-              capitaleCorrente += importoEuro;
-              apportiTotale += importoEuro;
-            }
-            
-            // Calcola rendita
-            const rendita = capitaleCorrente * rendimentoMensileDecimale;
-            capitaleCorrente += rendita;
-            renditaTotale += rendita;
-            
-            // Aggiorna capitale del fiume
-            capitaliPerFiume.set(fiume.id, capitaleCorrente);
-            valoreTotale += capitaleCorrente;
-          }
+
+        for (const [, stateMap] of Array.from(fiumiStates.entries())) {
+          valoreTotale += stateMap.get(mese) || 0;
         }
-        
-        // Aggiungi sempre il punto dati (anche per mese 0)
+        for (const [, renditeMap] of Array.from(fiumiRendite.entries())) {
+          renditaTotale += renditeMap.get(mese) || 0;
+        }
+        // Apporti = sorgenti al meseCreazione + affluenti
+        for (const fiume of allFiumi) {
+          if (mese === fiume.meseCreazione) apportiTotale += fiume.sorgente / 100;
+          apportiTotale += affluentiByFiume.get(fiume.id)?.get(mese) || 0;
+        }
+
         evoluzione.push({
           mese,
-          valore: Math.round(valoreTotale * 100), // euro → centesimi
-          rendita: Math.round(renditaTotale * 100), // euro → centesimi
-          apporti: Math.round(apportiTotale * 100), // euro → centesimi
+          valore: Math.round(valoreTotale * 100),
+          rendita: Math.round(renditaTotale * 100),
+          apporti: Math.round(apportiTotale * 100),
         });
       }
-      
+
       return evoluzione;
     }),
   }),

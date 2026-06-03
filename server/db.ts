@@ -258,6 +258,7 @@ export async function createAffluentiRicorrenti(params: {
 
 export async function updateAffluente(
   id: number,
+  userId: number,
   params: {
     importo?: number;
     mese?: number;
@@ -265,6 +266,14 @@ export async function updateAffluente(
     descrizione?: string | null;
   }
 ) {
+  const check = await db
+    .select({ id: affluenti.id })
+    .from(affluenti)
+    .innerJoin(fiumi, eq(affluenti.fiumeId, fiumi.id))
+    .where(and(eq(affluenti.id, id), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Affluente non trovato o non autorizzato");
+
   await db.update(affluenti).set(params).where(eq(affluenti.id, id));
   const updated = await db.select().from(affluenti).where(eq(affluenti.id, id)).limit(1);
   return updated[0];
@@ -280,6 +289,7 @@ export async function getAffluentiByGroupId(groupId: string) {
 
 export async function updateAffluentiGroup(
   groupId: string,
+  userId: number,
   params: {
     importo?: number;
     descrizione?: string | null;
@@ -288,6 +298,15 @@ export async function updateAffluentiGroup(
     dataInizio?: Date;
   }
 ) {
+  // Verifica ownership
+  const check = await db
+    .select({ id: affluenti.id })
+    .from(affluenti)
+    .innerJoin(fiumi, eq(affluenti.fiumeId, fiumi.id))
+    .where(and(eq(affluenti.groupId, groupId), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Gruppo non trovato o non autorizzato");
+
   // Get all affluenti in the group
   const groupAffluenti = await db
     .select()
@@ -321,7 +340,7 @@ export async function updateAffluentiGroup(
     const dataAffluente = params.dataInizio || firstAffluente.dataAffluente || fiume.dataCreazione || new Date('2026-01-01');
     
     // Calculate meseInizio from dataAffluente relative to impostazioni.dataInizio (NOT fiume.dataCreazione)
-    const settings = await getImpostazioni();
+    const settings = await getImpostazioniByUserId(userId);
     const pianoDataInizio = settings.dataInizio || new Date('2026-01-01');
     const meseInizio = dateToMonthOffset(pianoDataInizio, dataAffluente);
     
@@ -357,14 +376,33 @@ export async function updateAffluentiGroup(
   }
 }
 
-export async function deleteAffluente(id: number) {
+export async function deleteAffluente(id: number, userId: number) {
+  const check = await db
+    .select({ id: affluenti.id })
+    .from(affluenti)
+    .innerJoin(fiumi, eq(affluenti.fiumeId, fiumi.id))
+    .where(and(eq(affluenti.id, id), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Affluente non trovato o non autorizzato");
+
   await db.delete(affluenti).where(eq(affluenti.id, id));
   return { success: true };
 }
 
-export async function deleteAffluentiGroup(groupId: string) {
-  await db.delete(affluenti).where(eq(affluenti.groupId, groupId));
-  return { success: true };
+export async function deleteAffluentiGroup(groupId: string, userId: number) {
+  const check = await db
+    .select({ id: affluenti.id })
+    .from(affluenti)
+    .innerJoin(fiumi, eq(affluenti.fiumeId, fiumi.id))
+    .where(and(eq(affluenti.groupId, groupId), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Gruppo non trovato o non autorizzato");
+
+  const deleted = await db
+    .delete(affluenti)
+    .where(eq(affluenti.groupId, groupId))
+    .returning({ id: affluenti.id });
+  return { count: deleted.length };
 }
 
 /**
@@ -478,6 +516,7 @@ export async function createReinvestimento(params: {
 
 export async function updateReinvestimento(
   id: number,
+  userId: number,
   params: {
     fiumeOrigineId?: number;
     fiumeDestinazioneId?: number | null;
@@ -489,12 +528,28 @@ export async function updateReinvestimento(
     nuovoFiumeRendimento?: number | null;
   }
 ) {
+  const check = await db
+    .select({ id: reinvestimenti.id })
+    .from(reinvestimenti)
+    .innerJoin(fiumi, eq(reinvestimenti.fiumeOrigineId, fiumi.id))
+    .where(and(eq(reinvestimenti.id, id), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Reinvestimento non trovato o non autorizzato");
+
   await db.update(reinvestimenti).set(params).where(eq(reinvestimenti.id, id));
   const updated = await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, id)).limit(1);
   return updated[0];
 }
 
-export async function deleteReinvestimento(id: number) {
+export async function deleteReinvestimento(id: number, userId: number) {
+  const check = await db
+    .select({ id: reinvestimenti.id })
+    .from(reinvestimenti)
+    .innerJoin(fiumi, eq(reinvestimenti.fiumeOrigineId, fiumi.id))
+    .where(and(eq(reinvestimenti.id, id), eq(fiumi.userId, userId)))
+    .limit(1);
+  if (check.length === 0) throw new Error("Reinvestimento non trovato o non autorizzato");
+
   await db.delete(reinvestimenti).where(eq(reinvestimenti.id, id));
   return { success: true };
 }
