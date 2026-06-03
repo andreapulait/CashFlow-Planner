@@ -151,7 +151,6 @@ export default function Simulazione() {
   }
 
   const mesiPerAnno = getMesiPerAnno();
-  const hasCashFlow = getMesi().some(m => calcolaTotaliMese(m).cashFlow > 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -195,14 +194,6 @@ export default function Simulazione() {
         {/* Filtri */}
         <FilterBar onFilterChange={setFilter} currentFilter={filter} />
 
-        {/* Nota cash flow */}
-        {!hasCashFlow && (
-          <div className="mb-4 px-4 py-3 rounded-md bg-amber-50 border border-amber-200 text-sm text-amber-800">
-            <strong>Cash Flow a zero?</strong> — È corretto se i tuoi fiumi reinvestono il 100% della rendita.
-            Imposta una <em>percentuale di reinvestimento</em> inferiore al 100% su un fiume per generare cash flow prelevabile.
-          </div>
-        )}
-
         {/* Tabella riepilogo con raggruppamento per anno */}
         <Card className="mb-8">
           <CardHeader>
@@ -217,9 +208,9 @@ export default function Simulazione() {
                 <TableRow>
                   <TableHead className="w-48">Periodo</TableHead>
                   <TableHead className="text-right">Valore Totale</TableHead>
-                  <TableHead className="text-right">Rendita</TableHead>
                   <TableHead className="text-right">Apporti</TableHead>
                   <TableHead className="text-right">Cash Flow</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Prelevabile</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -247,14 +238,14 @@ export default function Simulazione() {
                         <TableCell className="text-right font-semibold">
                           {formatCurrency(totAnno.valore)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(totAnno.rendita)}
-                        </TableCell>
                         <TableCell className="text-right text-blue-600">
                           {totAnno.affluenti > 0 ? formatCurrency(totAnno.affluenti) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="text-right font-semibold text-primary">
-                          {totAnno.cashFlow > 0 ? formatCurrency(totAnno.cashFlow) : <span className="text-muted-foreground">—</span>}
+                          {formatCurrency(totAnno.rendita)}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm">
+                          {totAnno.cashFlow > 0 ? formatCurrency(totAnno.cashFlow) : <span>—</span>}
                         </TableCell>
                       </TableRow>
 
@@ -269,14 +260,14 @@ export default function Simulazione() {
                             <TableCell className="text-right text-sm">
                               {formatCurrency(t.valore)}
                             </TableCell>
-                            <TableCell className="text-right text-sm">
-                              {formatCurrency(t.rendita)}
-                            </TableCell>
                             <TableCell className="text-right text-sm text-blue-600">
                               {t.affluenti > 0 ? formatCurrency(t.affluenti) : <span className="text-muted-foreground">—</span>}
                             </TableCell>
                             <TableCell className="text-right text-sm font-semibold text-primary">
-                              {t.cashFlow > 0 ? formatCurrency(t.cashFlow) : <span className="text-muted-foreground">—</span>}
+                              {formatCurrency(t.rendita)}
+                            </TableCell>
+                            <TableCell className="text-right text-sm text-muted-foreground">
+                              {t.cashFlow > 0 ? formatCurrency(t.cashFlow) : <span>—</span>}
                             </TableCell>
                           </TableRow>
                         );
@@ -305,11 +296,11 @@ export default function Simulazione() {
                     <TableRow>
                       <TableHead>Mese</TableHead>
                       <TableHead className="text-right">Valore</TableHead>
-                      <TableHead className="text-right">Rendita</TableHead>
                       <TableHead className="text-right">Apporto</TableHead>
                       <TableHead className="text-right">Reinv. Uscita</TableHead>
                       <TableHead className="text-right">Reinv. Entrata</TableHead>
                       <TableHead className="text-right">Cash Flow</TableHead>
+                      <TableHead className="text-right text-muted-foreground">Prelevabile</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -322,7 +313,6 @@ export default function Simulazione() {
                             {formatMonthOffset(m, impostazioni?.dataInizio)}
                           </TableCell>
                           <TableCell className="text-right">{formatCurrency(d.valore)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(d.rendita)}</TableCell>
                           <TableCell className="text-right text-blue-600">
                             {(d.affluenteMese || 0) > 0 ? formatCurrency(d.affluenteMese || 0) : "—"}
                           </TableCell>
@@ -333,6 +323,9 @@ export default function Simulazione() {
                             {d.reinvestimentoEntrata ? `+${formatCurrency(d.reinvestimentoEntrata)}` : "—"}
                           </TableCell>
                           <TableCell className="text-right font-semibold text-primary">
+                            {formatCurrency(d.rendita)}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
                             {d.cashFlowMensile > 0 ? formatCurrency(d.cashFlowMensile) : "—"}
                           </TableCell>
                         </TableRow>
