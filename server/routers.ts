@@ -305,18 +305,17 @@ export const appRouter = router({
         id: z.number().int().positive(),
         fiumeSorgenteId: z.number().int().positive().optional(),
         fiumeDestinazioneId: z.number().int().positive().optional(),
-        mese: z.number().int().min(1).max(240).optional(),
-        dataReinvestimento: z.date().optional(),
+        mese: z.number().int().min(0).max(240).optional(),
+        dataReinvestimento: z.coerce.date().optional(),
         importoFisso: z.number().int().positive().optional(),
         percentuale: z.number().int().min(1).max(10000).optional(),
         nuovoFiumeNome: z.string().optional(),
         nuovoFiumeRendimento: z.number().int().min(0).max(10000).optional(),
-        descrizione: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const { id, fiumeSorgenteId, mese, ...rest } = input;
-        // Rimappa i nomi del campo client → nomi DB
-        const params: any = { ...rest };
+        // Rimappa i nomi del campo client → nomi attesi da updateReinvestimento
+        const params: Parameters<typeof db.updateReinvestimento>[2] = { ...rest };
         if (fiumeSorgenteId !== undefined) params.fiumeOrigineId = fiumeSorgenteId;
         if (mese !== undefined) params.meseReinvestimento = mese;
         return db.updateReinvestimento(id, ctx.user.id, params);

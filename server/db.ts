@@ -536,7 +536,22 @@ export async function updateReinvestimento(
     .limit(1);
   if (check.length === 0) throw new Error("Reinvestimento non trovato o non autorizzato");
 
-  await db.update(reinvestimenti).set(params).where(eq(reinvestimenti.id, id));
+  // Costruisce l'oggetto SET solo con le colonne esistenti nella tabella.
+  // Campi extra (es. "descrizione" non presente nello schema) causerebbero
+  // un errore PostgreSQL silenzioso che blocca la request.
+  const updateData: Record<string, any> = {};
+  if (params.fiumeOrigineId      !== undefined) updateData.fiumeOrigineId      = params.fiumeOrigineId;
+  if (params.fiumeDestinazioneId !== undefined) updateData.fiumeDestinazioneId = params.fiumeDestinazioneId;
+  if (params.meseReinvestimento  !== undefined) updateData.meseReinvestimento  = params.meseReinvestimento;
+  if (params.dataReinvestimento  !== undefined) updateData.dataReinvestimento  = params.dataReinvestimento;
+  if (params.importoFisso        !== undefined) updateData.importoFisso        = params.importoFisso;
+  if (params.percentuale         !== undefined) updateData.percentuale         = params.percentuale;
+  if (params.nuovoFiumeNome      !== undefined) updateData.nuovoFiumeNome      = params.nuovoFiumeNome;
+  if (params.nuovoFiumeRendimento !== undefined) updateData.nuovoFiumeRendimento = params.nuovoFiumeRendimento;
+
+  if (Object.keys(updateData).length === 0) return (await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, id)).limit(1))[0];
+
+  await db.update(reinvestimenti).set(updateData).where(eq(reinvestimenti.id, id));
   const updated = await db.select().from(reinvestimenti).where(eq(reinvestimenti.id, id)).limit(1);
   return updated[0];
 }

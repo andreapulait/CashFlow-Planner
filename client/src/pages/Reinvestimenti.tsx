@@ -197,16 +197,6 @@ function ReinvestimentoForm({
         </>
       )}
 
-      {/* Descrizione */}
-      <div className="grid gap-2">
-        <Label htmlFor="reinv-descrizione">Descrizione (opzionale)</Label>
-        <Input
-          id="reinv-descrizione"
-          value={fd.descrizione}
-          placeholder="es. Diversificazione portafoglio"
-          onChange={(e) => setFd({ ...fd, descrizione: e.target.value })}
-        />
-      </div>
     </div>
   );
 }
@@ -251,7 +241,6 @@ function buildPayload(
     data.nuovoFiumeRendimento = Math.round(r * 100);
   }
 
-  if (fd.descrizione) data.descrizione = fd.descrizione;
   return data;
 }
 
