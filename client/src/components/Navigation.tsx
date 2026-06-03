@@ -105,7 +105,7 @@ export default function Navigation() {
         {isAuthenticated && (
           <>
             {/* ── Desktop nav (md+) ─────────────────────── */}
-            <div className="hidden md:flex items-center gap-1 flex-1">
+            <div className="hidden lg:flex items-center gap-1 flex-1">
 
               {/* Dashboard */}
               <Link href="/">
@@ -180,7 +180,7 @@ export default function Navigation() {
               <NotificationCenter />
 
               {/* Utente + logout — solo desktop */}
-              <span className="hidden md:inline text-sm text-muted-foreground">
+              <span className="hidden lg:inline text-sm text-muted-foreground">
                 {user?.name || user?.email}
               </span>
               <Button
@@ -188,7 +188,7 @@ export default function Navigation() {
                 size="sm"
                 onClick={handleLogout}
                 disabled={logoutMutation.isPending}
-                className="hidden md:flex"
+                className="hidden lg:flex"
               >
                 <LogOut className="mr-1.5 h-4 w-4" />
                 Logout
@@ -197,7 +197,7 @@ export default function Navigation() {
               {/* Hamburger — solo mobile */}
               <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden">
+                  <Button variant="ghost" size="icon" className="lg:hidden">
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
