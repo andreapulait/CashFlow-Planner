@@ -1405,6 +1405,14 @@ export const appRouter = router({
         await dbNotifiche.deleteNotifica(input.id, ctx.user.id);
         return { success: true };
       }),
+
+    // Controlla alert temporali in scadenza e genera notifiche
+    checkUpcomingEvents: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const dbNotifiche = await import("./db-notifiche");
+        const count = await dbNotifiche.checkUpcomingEvents(ctx.user.id);
+        return { created: count };
+      }),
   }),
 
   // Alert Configuration router
@@ -1444,8 +1452,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { id, ...data } = input;
         const dbNotifiche = await import("./db-notifiche");
-        const updated = await dbNotifiche.updateAlertConfig(id, ctx.user.id, data);
-        // Fire-and-forget: non blocca la risposta, la notifica arriva in background
+        // Reset triggered quando si aggiorna l'alert (nuova dataAlert → deve riscattare)
+        const updated = await dbNotifiche.updateAlertConfig(id, ctx.user.id, { ...data, triggered: 0 });
+        // Fire-and-forget: valuta condizione in background
         if (updated) evaluateAndNotify(updated, ctx.user.id).catch(console.error);
         return updated;
       }),
@@ -1558,8 +1567,57 @@ export const appRouter = router({
         
         return { success: true, count: createdAlerts.length, alerts: createdAlerts };
       }),
+
+    // Crea alert per l'attivazione di un fiume
+    createAlertFiume: protectedProcedure
+      .input(z.object({
+        fiumeId: z.number().int().positive(),
+        nomeFiume: z.string(),
+        dataAttivazione: z.coerce.date(),
+        giorniPreavviso: z.number().int().min(1).max(30).default(7),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbNotifiche = await import("./db-notifiche");
+        const dataAlert = new Date(input.dataAttivazione);
+        dataAlert.setDate(dataAlert.getDate() - input.giorniPreavviso);
+        return dbNotifiche.createAlertConfig({
+          userId: ctx.user.id,
+          tipo: "fiume_attivazione",
+          nome: `Attivazione: ${input.nomeFiume}`,
+          attivo: 1,
+          dataAlert,
+          giorniPreavviso: input.giorniPreavviso,
+          fiumeId: input.fiumeId,
+          soglia: null,
+          operatore: null,
+        });
+      }),
+
+    // Crea alert per un reinvestimento puntuale
+    createAlertReinvestimento: protectedProcedure
+      .input(z.object({
+        reinvestimentoId: z.number().int().positive(),
+        nomeReinv: z.string(),
+        dataReinvestimento: z.coerce.date(),
+        giorniPreavviso: z.number().int().min(1).max(30).default(7),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbNotifiche = await import("./db-notifiche");
+        const dataAlert = new Date(input.dataReinvestimento);
+        dataAlert.setDate(dataAlert.getDate() - input.giorniPreavviso);
+        return dbNotifiche.createAlertConfig({
+          userId: ctx.user.id,
+          tipo: "reinvestimento_puntuale",
+          nome: `Reinvestimento: ${input.nomeReinv}`,
+          attivo: 1,
+          dataAlert,
+          giorniPreavviso: input.giorniPreavviso,
+          soglia: null,
+          operatore: null,
+        });
+      }),
   }),
-  
+
   // Data Management: Import/Export
   dataManagement: router({
     // Export all user data

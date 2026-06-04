@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { notifiche, alertConfig, type Notifica, type InsertNotifica, type AlertConfig, type InsertAlertConfig } from "../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, lte, isNotNull } from "drizzle-orm";
 
 /**
  * Get all notifications for a user
@@ -132,6 +132,75 @@ export async function deleteAlertConfig(id: number, userId: number): Promise<voi
 /**
  * Toggle alert configuration active status
  */
+/**
+ * Controlla gli alert temporali non ancora notificati la cui dataAlert è arrivata
+ * (dataAlert <= oggi) e crea una notifica per ognuno, segnandoli come triggered.
+ * Restituisce il numero di nuove notifiche create.
+ */
+export async function checkUpcomingEvents(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const oggi = new Date();
+
+  // Alert attivi, temporali (hanno dataAlert), non ancora notificati, la cui data è arrivata
+  const pendingAlerts = await db
+    .select()
+    .from(alertConfig)
+    .where(
+      and(
+        eq(alertConfig.userId, userId),
+        eq(alertConfig.attivo, 1),
+        eq(alertConfig.triggered, 0),
+        isNotNull(alertConfig.dataAlert),
+        lte(alertConfig.dataAlert, oggi)
+      )
+    );
+
+  if (pendingAlerts.length === 0) return 0;
+
+  const tipoIcona: Record<string, string> = {
+    affluente_programmato: "💰",
+    fiume_attivazione:     "🌊",
+    reinvestimento_puntuale: "↔️",
+  };
+
+  const tipoDescrizione: Record<string, string> = {
+    affluente_programmato: "Affluente pianificato",
+    fiume_attivazione:     "Attivazione fiume",
+    reinvestimento_puntuale: "Reinvestimento",
+  };
+
+  let created = 0;
+
+  for (const alert of pendingAlerts) {
+    const icona = tipoIcona[alert.tipo] ?? "🔔";
+    const desc  = tipoDescrizione[alert.tipo] ?? "Evento pianificato";
+    const giorniMsg = alert.giorniPreavviso
+      ? ` (preavviso ${alert.giorniPreavviso} gg)`
+      : "";
+
+    await createNotifica({
+      userId,
+      tipo: "evento_imminente",
+      titolo: `${icona} ${desc}: ${alert.nome}`,
+      messaggio: `L'evento pianificato "${alert.nome}" è imminente o scaduto${giorniMsg}.`,
+      priorita: "medium",
+      fiumeId: alert.fiumeId ?? null,
+    });
+
+    // Marca come notificato
+    await db
+      .update(alertConfig)
+      .set({ triggered: 1 })
+      .where(and(eq(alertConfig.id, alert.id), eq(alertConfig.userId, userId)));
+
+    created++;
+  }
+
+  return created;
+}
+
 export async function toggleAlertConfig(id: number, userId: number): Promise<AlertConfig | null> {
   const db = await getDb();
   if (!db) return null;

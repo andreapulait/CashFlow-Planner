@@ -22,12 +22,15 @@ type FormData = {
   meseCreazione: string;
   dataCreazione: Date | undefined;
   percentualeReinvestimento: string;
+  creaAlert: boolean;
+  giorniPreavviso: string;
 };
 
 const emptyForm = (): FormData => ({
   nome: "", sorgente: "", rendimento: "",
   meseCreazione: "0", dataCreazione: undefined,
   percentualeReinvestimento: "100",
+  creaAlert: false, giorniPreavviso: "7",
 });
 
 export function FiumiManager() {
@@ -46,8 +49,26 @@ export function FiumiManager() {
     utils.calcoli.simulazioneQuinquennale.invalidate();
   };
 
+  const createAlertFiumeMutation = trpc.alertConfig.createAlertFiume.useMutation({
+    onError: (e) => console.error("Alert fiume:", e.message),
+  });
+
   const createMutation = trpc.fiumi.create.useMutation({
-    onSuccess: () => { invalidate(); setIsCreateOpen(false); setFormData(emptyForm()); toast.success("Fiume creato"); },
+    onSuccess: (fiume) => {
+      invalidate();
+      setIsCreateOpen(false);
+      // Crea alert se richiesto e se esiste dataCreazione
+      if (formData.creaAlert && formData.dataCreazione && fiume) {
+        createAlertFiumeMutation.mutate({
+          fiumeId: (fiume as any).id,
+          nomeFiume: formData.nome,
+          dataAttivazione: formData.dataCreazione,
+          giorniPreavviso: parseInt(formData.giorniPreavviso) || 7,
+        });
+      }
+      setFormData(emptyForm());
+      toast.success("Fiume creato");
+    },
     onError: (e) => toast.error("Errore: " + e.message),
   });
 
@@ -98,6 +119,8 @@ export function FiumiManager() {
       meseCreazione: fiume.meseCreazione.toString(),
       dataCreazione: fiume.dataCreazione ? new Date(fiume.dataCreazione) : undefined,
       percentualeReinvestimento: (fiume.percentualeReinvestimento ?? 100).toString(),
+      creaAlert: false,
+      giorniPreavviso: "7",
     });
     setIsEditOpen(true);
   };
@@ -151,6 +174,39 @@ export function FiumiManager() {
           Quota della rendita mensile reinvestita nel fiume (100% = tutto torna in capitale).
         </p>
       </div>
+
+      {/* Alert automatico — solo in creazione (richiede dataCreazione) */}
+      {id === "create" && (
+        <div className="border-t pt-4 mt-2">
+          <div className="flex items-center space-x-2 mb-3">
+            <input
+              type="checkbox"
+              id={`${id}-creaAlert`}
+              checked={formData.creaAlert}
+              onChange={e => setFormData({ ...formData, creaAlert: e.target.checked })}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <Label htmlFor={`${id}-creaAlert`} className="font-medium cursor-pointer">
+              Crea Alert Automatico
+            </Label>
+          </div>
+          {formData.creaAlert && (
+            <div className="pl-6 grid gap-2">
+              <Label htmlFor={`${id}-giorni`}>Giorni di Preavviso</Label>
+              <Input
+                id={`${id}-giorni`}
+                type="number" min="1" max="30"
+                value={formData.giorniPreavviso}
+                onChange={e => setFormData({ ...formData, giorniPreavviso: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Riceverai una notifica {formData.giorniPreavviso} giorni prima dell'attivazione del fiume.
+                Richiede che sia impostata la Data di Inizio.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 

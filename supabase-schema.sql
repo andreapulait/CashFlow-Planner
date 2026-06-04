@@ -147,9 +147,11 @@ CREATE TABLE IF NOT EXISTS "alertConfig" (
   "dataAlert"        TIMESTAMP,
   "giorniPreavviso"  INTEGER,
   "affluenteId"      INTEGER,
+  "triggered"        INTEGER      NOT NULL DEFAULT 0,
   "createdAt"        TIMESTAMP    NOT NULL DEFAULT NOW(),
   "updatedAt"        TIMESTAMP    NOT NULL DEFAULT NOW()
 );
+ALTER TABLE "alertConfig" ADD COLUMN IF NOT EXISTS "triggered" INTEGER NOT NULL DEFAULT 0;
 
 -- ── Password Reset Tokens ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "passwordResetTokens" (

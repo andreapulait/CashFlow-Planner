@@ -210,6 +210,8 @@ export const alertConfig = pgTable("alertConfig", {
   dataAlert: timestamp("dataAlert"),
   giorniPreavviso: integer("giorniPreavviso"),
   affluenteId: integer("affluenteId"),
+  /** 0 = non ancora notificato, 1 = notifica già inviata */
+  triggered: integer("triggered").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

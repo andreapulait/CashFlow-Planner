@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { useEffect } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,24 @@ export default function NotificationCenter() {
   const utils = trpc.useUtils();
   const { data: notifiche = [] } = trpc.notifiche.list.useQuery();
   const { data: unreadCount = 0 } = trpc.notifiche.unreadCount.useQuery();
+
+  const checkEventsMutation = trpc.notifiche.checkUpcomingEvents.useMutation({
+    onSuccess: (data) => {
+      if (data.created > 0) {
+        utils.notifiche.list.invalidate();
+        utils.notifiche.unreadCount.invalidate();
+      }
+    },
+  });
+
+  // Controlla alert in scadenza una volta per sessione
+  useEffect(() => {
+    const key = "cfp_events_checked_" + new Date().toDateString();
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      checkEventsMutation.mutate();
+    }
+  }, []);
 
   const invalidateAll = () => {
     utils.notifiche.list.invalidate();

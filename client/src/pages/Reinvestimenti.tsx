@@ -26,6 +26,8 @@ export type FormData = {
   nuovoFiumeNome: string;
   nuovoFiumeRendimento: string;
   descrizione: string;
+  creaAlert: boolean;
+  giorniPreavviso: string;
 };
 
 export const emptyForm = (): FormData => ({
@@ -38,6 +40,8 @@ export const emptyForm = (): FormData => ({
   nuovoFiumeNome: "",
   nuovoFiumeRendimento: "",
   descrizione: "",
+  creaAlert: false,
+  giorniPreavviso: "7",
 });
 
 // ─── Form (componente a livello modulo — NON annidato dentro Reinvestimenti) ──
@@ -53,10 +57,11 @@ interface ReinvestimentoFormProps {
   setDest: (d: "esistente" | "nuovo") => void;
   fiumi: Array<{ id: number; nome: string }> | undefined;
   dataInizioPiano: Date | string | null | undefined;
+  showAlert?: boolean;
 }
 
 function ReinvestimentoForm({
-  fd, setFd, tipo, setTipo, dest, setDest, fiumi, dataInizioPiano,
+  fd, setFd, tipo, setTipo, dest, setDest, fiumi, dataInizioPiano, showAlert = false,
 }: ReinvestimentoFormProps) {
   return (
     <div className="grid gap-4 py-4">
@@ -207,6 +212,38 @@ function ReinvestimentoForm({
           onChange={(e) => setFd({ ...fd, descrizione: e.target.value })}
         />
       </div>
+
+      {/* Alert automatico — solo in creazione */}
+      {showAlert && (
+        <div className="border-t pt-4 mt-2">
+          <div className="flex items-center space-x-2 mb-3">
+            <input
+              type="checkbox"
+              id="reinv-creaAlert"
+              checked={fd.creaAlert}
+              onChange={e => setFd({ ...fd, creaAlert: e.target.checked })}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <Label htmlFor="reinv-creaAlert" className="font-medium cursor-pointer">
+              Crea Alert Automatico
+            </Label>
+          </div>
+          {fd.creaAlert && (
+            <div className="pl-6 grid gap-2">
+              <Label htmlFor="reinv-giorni">Giorni di Preavviso</Label>
+              <Input
+                id="reinv-giorni"
+                type="number" min="1" max="30"
+                value={fd.giorniPreavviso}
+                onChange={e => setFd({ ...fd, giorniPreavviso: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Riceverai una notifica {fd.giorniPreavviso} giorni prima della data del reinvestimento.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -483,9 +520,27 @@ export default function Reinvestimenti() {
     utils.calcoli.evoluzionePatrimonio.invalidate();
   };
 
+  const createAlertReinvMutation = trpc.alertConfig.createAlertReinvestimento.useMutation({
+    onError: (e) => console.error("Alert reinvestimento:", e.message),
+  });
+
   const createMutation = trpc.reinvestimenti.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (reinv: any) => {
       invalidateCalcoli();
+      // Crea alert se richiesto e se esiste dataReinvestimento
+      if (formData.creaAlert && formData.dataReinvestimento && reinv?.id) {
+        const src = fiumi?.find(f => f.id === parseInt(formData.fiumeSorgenteId));
+        const dst = formData.fiumeDestinazioneId
+          ? fiumi?.find(f => f.id === parseInt(formData.fiumeDestinazioneId))
+          : null;
+        const nomeReinv = `${src?.nome ?? "?"} → ${dst?.nome ?? formData.nuovoFiumeNome ?? "Nuovo"}`;
+        createAlertReinvMutation.mutate({
+          reinvestimentoId: reinv.id,
+          nomeReinv,
+          dataReinvestimento: formData.dataReinvestimento,
+          giorniPreavviso: parseInt(formData.giorniPreavviso) || 7,
+        });
+      }
       toast.success("Reinvestimento creato con successo");
       setIsCreateOpen(false);
       setFormData(emptyForm());
@@ -635,6 +690,8 @@ export default function Reinvestimenti() {
       nuovoFiumeNome: r.nuovoFiumeNome || "",
       nuovoFiumeRendimento: r.nuovoFiumeRendimento ? (r.nuovoFiumeRendimento / 100).toString() : "",
       descrizione: r.descrizione || "",
+      creaAlert: false,
+      giorniPreavviso: "7",
     });
     setIsEditOpen(true);
   };
@@ -919,6 +976,7 @@ export default function Reinvestimenti() {
               setDest={setTipoDestinazione}
               fiumi={fiumi}
               dataInizioPiano={impostazioni?.dataInizio}
+              showAlert={true}
             />
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Annulla</Button>
