@@ -1121,11 +1121,12 @@ export async function createScenario(params: {
   return inserted[0];
 }
 
-export async function deleteScenario(id: number) {
-  // Delete related snapshots
+export async function deleteScenario(id: number, userId: number) {
+  const owned = await db.select({ id: scenari.id }).from(scenari)
+    .where(and(eq(scenari.id, id), eq(scenari.userId, userId))).limit(1);
+  if (owned.length === 0) throw new Error("Scenario non trovato o non autorizzato");
   await db.delete(scenarioSnapshots).where(eq(scenarioSnapshots.scenarioId, id));
-  // Delete scenario
-  await db.delete(scenari).where(eq(scenari.id, id));
+  await db.delete(scenari).where(and(eq(scenari.id, id), eq(scenari.userId, userId)));
   return { success: true };
 }
 
@@ -1159,6 +1160,7 @@ export async function createScenarioSnapshot(params: {
   affluentiData: string;
   reinvestimentiData: string;
   impostazioniData: string;
+  reinvestimentiPeriodicaData?: string;
 }) {
   const result = await db.insert(scenarioSnapshots).values(params).returning({ id: scenarioSnapshots.id });
   const inserted = await db.select().from(scenarioSnapshots).where(eq(scenarioSnapshots.id, result[0].id)).limit(1);

@@ -172,6 +172,8 @@ export const scenarioSnapshots = pgTable("scenarioSnapshots", {
   affluentiData: text("affluentiData").notNull(),
   reinvestimentiData: text("reinvestimentiData").notNull(),
   impostazioniData: text("impostazioniData").notNull(),
+  /** reinvestimenti periodici — nullable per compatibilità con snapshot creati prima della feature */
+  reinvestimentiPeriodicaData: text("reinvestimentiPeriodicaData"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

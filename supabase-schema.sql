@@ -113,10 +113,11 @@ CREATE TABLE IF NOT EXISTS "scenari" (
 CREATE TABLE IF NOT EXISTS "scenarioSnapshots" (
   "id"                 SERIAL PRIMARY KEY,
   "scenarioId"         INTEGER NOT NULL REFERENCES "scenari"("id") ON DELETE CASCADE,
-  "fiumiData"          TEXT NOT NULL,
-  "affluentiData"      TEXT NOT NULL,
-  "reinvestimentiData" TEXT NOT NULL,
-  "impostazioniData"   TEXT NOT NULL,
+  "fiumiData"                   TEXT NOT NULL,
+  "affluentiData"               TEXT NOT NULL,
+  "reinvestimentiData"          TEXT NOT NULL,
+  "impostazioniData"            TEXT NOT NULL,
+  "reinvestimentiPeriodicaData" TEXT,
   "createdAt"          TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -152,6 +153,7 @@ CREATE TABLE IF NOT EXISTS "alertConfig" (
   "updatedAt"        TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 ALTER TABLE "alertConfig" ADD COLUMN IF NOT EXISTS "triggered" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "scenarioSnapshots" ADD COLUMN IF NOT EXISTS "reinvestimentiPeriodicaData" TEXT;
 
 -- ── Password Reset Tokens ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS "passwordResetTokens" (

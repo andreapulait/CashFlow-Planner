@@ -1253,7 +1253,7 @@ export const appRouter = router({
           attivo: 0,
         });
         
-        // Create snapshot of current configuration
+        // Snapshot della configurazione corrente completa
         const fiumi = await db.getFiumiByUserId(ctx.user.id);
         const affluenti: any[] = [];
         for (const fiume of fiumi) {
@@ -1261,16 +1261,18 @@ export const appRouter = router({
           affluenti.push(...fiumeAffluenti.map(a => ({ ...a, fiumeId: fiume.id })));
         }
         const reinvestimenti = await db.getReinvestimentiByUserId(ctx.user.id);
+        const reinvestimentiPeriodici = await db.getReinvestimentiPeriodicByUserId(ctx.user.id);
         const impostazioni = await db.getImpostazioniByUserId(ctx.user.id);
-        
+
         await db.createScenarioSnapshot({
           scenarioId: scenario.id,
           fiumiData: JSON.stringify(fiumi),
           affluentiData: JSON.stringify(affluenti),
           reinvestimentiData: JSON.stringify(reinvestimenti),
+          reinvestimentiPeriodicaData: JSON.stringify(reinvestimentiPeriodici),
           impostazioniData: JSON.stringify(impostazioni),
         });
-        
+
         return scenario;
       }),
     
@@ -1278,12 +1280,13 @@ export const appRouter = router({
       .input(z.object({
         id: z.number().int().positive(),
       }))
-      .mutation(async ({ input }) => {
-        await db.deleteScenario(input.id);
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteScenario(input.id, ctx.user.id);
         return { success: true };
       }),
-    
-    setAttivo: protectedProcedure
+
+    // "Preferito" — evidenzia uno scenario come riferimento principale (solo estetico)
+    togglePreferito: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
       }))
@@ -1304,6 +1307,9 @@ export const appRouter = router({
           fiumi: JSON.parse(snapshot.fiumiData),
           affluenti: JSON.parse(snapshot.affluentiData),
           reinvestimenti: JSON.parse(snapshot.reinvestimentiData),
+          reinvestimentiPeriodici: snapshot.reinvestimentiPeriodicaData
+            ? JSON.parse(snapshot.reinvestimentiPeriodicaData)
+            : [],
           impostazioni: JSON.parse(snapshot.impostazioniData),
         };
       }),
@@ -1314,53 +1320,126 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         const results = [];
-        
+
         for (const scenarioId of input.scenarioIds) {
           const scenario = await db.getScenarioById(scenarioId);
           const snapshot = await db.getScenarioSnapshotByScenarioId(scenarioId);
-          
           if (!scenario || !snapshot) continue;
-          
-          const fiumi = JSON.parse(snapshot.fiumiData);
-          const affluenti = JSON.parse(snapshot.affluentiData);
-          const reinvestimenti = JSON.parse(snapshot.reinvestimentiData);
-          const impostazioni = JSON.parse(snapshot.impostazioniData);
-          
-          // Calculate final values for this scenario
+
+          const fiumi: any[]      = JSON.parse(snapshot.fiumiData);
+          const affluentiAll: any[] = JSON.parse(snapshot.affluentiData);
+          const reinvestimentiAll: any[] = JSON.parse(snapshot.reinvestimentiData);
+          const periodicAll: any[] = snapshot.reinvestimentiPeriodicaData
+            ? JSON.parse(snapshot.reinvestimentiPeriodicaData)
+            : [];
+          const impostazioni: any = JSON.parse(snapshot.impostazioniData);
+
+          const orizzonteTemporale: number = impostazioni?.orizzonteTemporale || 60;
+
+          // ── Prepara mappe affluenti ──────────────────────────────────────
+          const affluentiByFiume = new Map<number, Map<number, number>>();
+          fiumi.forEach(f => affluentiByFiume.set(f.id, new Map()));
+          affluentiAll.forEach((a: any) => {
+            const map = affluentiByFiume.get(a.fiumeId);
+            if (map) map.set(a.mese, (map.get(a.mese) || 0) + a.importo / 100);
+          });
+
+          // ── Raggruppa reinvestimenti per mese ────────────────────────────
+          const reinvByMese = new Map<number, any[]>();
+          reinvestimentiAll.forEach((rw: any) => {
+            const mese = rw.reinvestimento?.meseReinvestimento ?? rw.meseReinvestimento;
+            if (!reinvByMese.has(mese)) reinvByMese.set(mese, []);
+            reinvByMese.get(mese)!.push(rw);
+          });
+
+          // ── Simula mese per mese (stesso algoritmo di runSimulazione) ────
+          const fiumiStates = new Map<number, Map<number, number>>();
+          const fiumiRendite = new Map<number, Map<number, number>>();
+          fiumi.forEach(f => {
+            fiumiStates.set(f.id, new Map());
+            fiumiRendite.set(f.id, new Map());
+          });
+
+          for (let mese = 0; mese <= orizzonteTemporale; mese++) {
+            // Passo 1: rendita per ogni fiume
+            for (const [fiumeId, stateMap] of Array.from(fiumiStates.entries())) {
+              const fiume = fiumi.find(f => f.id === fiumeId);
+              if (!fiume) continue;
+              const rendMensile = Math.pow(1 + fiume.rendimento / 10000, 1/12) - 1;
+              const percReinv   = fiume.percentualeReinvestimento ?? 100;
+              const affMap      = affluentiByFiume.get(fiumeId) || new Map();
+              const meseInizio  = fiume.meseCreazione ?? 0;
+
+              if (mese < meseInizio) { stateMap.set(mese, 0); fiumiRendite.get(fiumeId)!.set(mese, 0); continue; }
+              if (mese === meseInizio) { stateMap.set(mese, fiume.sorgente / 100 + (affMap.get(mese) || 0)); fiumiRendite.get(fiumeId)!.set(mese, 0); continue; }
+
+              const capPrec  = stateMap.get(mese - 1) || 0;
+              const rendita  = capPrec * rendMensile;
+              const reinvest = rendita * (percReinv / 100);
+              stateMap.set(mese, capPrec + reinvest + (affMap.get(mese) || 0));
+              fiumiRendite.get(fiumeId)!.set(mese, rendita);
+            }
+
+            // Passo 2: reinvestimenti puntuali
+            for (const rw of (reinvByMese.get(mese) || [])) {
+              const r = rw.reinvestimento ?? rw;
+              const srcState = fiumiStates.get(r.fiumeOrigineId);
+              if (!srcState) continue;
+              const capSrc = srcState.get(mese) || 0;
+              let importo = r.importoFisso ? r.importoFisso / 100 : r.percentuale ? capSrc * (r.percentuale / 10000) : 0;
+              importo = Math.min(importo, Math.max(0, capSrc));
+              srcState.set(mese, capSrc - importo);
+              if (r.fiumeDestinazioneId) {
+                const dstState = fiumiStates.get(r.fiumeDestinazioneId);
+                if (dstState) dstState.set(mese, (dstState.get(mese) || 0) + importo);
+              }
+            }
+
+            // Passo 3: reinvestimenti periodici
+            for (const row of periodicAll) {
+              const rp = row.rp ?? row;
+              if (mese < rp.meseInizio || mese > rp.meseFine) continue;
+              if ((mese - rp.meseInizio) % rp.periodicita !== 0) continue;
+              const srcState = fiumiStates.get(rp.fiumeOrigineId);
+              if (!srcState) continue;
+              const capSrc = srcState.get(mese) || 0;
+              const rendita = fiumiRendite.get(rp.fiumeOrigineId)?.get(mese) || 0;
+              const base = rp.tipoCalcolo === "rendita" ? rendita : capSrc;
+              let importo = Math.min(base * (rp.percentuale / 10000), Math.max(0, capSrc));
+              srcState.set(mese, capSrc - importo);
+              if (rp.fiumeDestinazioneId) {
+                const dstState = fiumiStates.get(rp.fiumeDestinazioneId);
+                if (dstState) dstState.set(mese, (dstState.get(mese) || 0) + importo);
+              }
+            }
+          }
+
+          // ── Aggrega risultati ────────────────────────────────────────────
           let capitaleTotale = 0;
           let cashFlowMensile = 0;
-          
-          fiumi.forEach((fiume: any) => {
-            const orizzonteTemporale = impostazioni?.orizzonteTemporale || 5;
-            let capitale = fiume.sorgente / 100;
-            
-            for (let mese = 1; mese <= orizzonteTemporale; mese++) {
-              const rendimentoAnnuale = fiume.rendimento / 10000;
-              const rendimentoMensile = Math.pow(1 + rendimentoAnnuale, 1/12) - 1;
-              const rendita = capitale * rendimentoMensile;
-              capitale += rendita;
-              
-              // Add affluenti for questo mese
-              const affluentiAnno = affluenti.filter((a: any) => a.fiumeId === fiume.id && a.mese === mese);
-              affluentiAnno.forEach((a: any) => {
-                capitale += a.importo / 100;
-              });
-            }
-            
-            capitaleTotale += capitale;
-            const rendimentoAnnuale = fiume.rendimento / 10000;
-            const rendimentoMensile = Math.pow(1 + rendimentoAnnuale, 1/12) - 1;
-            cashFlowMensile += capitale * rendimentoMensile;
-          });
-          
+          for (const [, s] of Array.from(fiumiStates.entries()))  capitaleTotale  += s.get(orizzonteTemporale) || 0;
+          for (const [, r] of Array.from(fiumiRendite.entries())) cashFlowMensile += r.get(orizzonteTemporale) || 0;
+
+          const totalInitialCents = fiumi.reduce((s: number, f: any) => s + f.sorgente, 0);
+          const roi = totalInitialCents > 0
+            ? ((capitaleTotale * 100 - totalInitialCents) / totalInitialCents) * 100
+            : 0;
+
           results.push({
             scenario,
-            capitaleTotale: Math.round(capitaleTotale * 100),
-            cashFlowMensile: Math.round(cashFlowMensile * 100),
+            capitaleTotale:  Math.round(capitaleTotale * 100),   // centesimi
+            cashFlowMensile: Math.round(cashFlowMensile * 100),  // centesimi
             numeroFiumi: fiumi.length,
+            roi: Math.round(roi * 100) / 100,
+            obiettivo: impostazioni?.obiettivoMensile || 0,
+            orizzonteTemporale,
+            // Riepilogo contenuto per la vista dettaglio
+            numAffluenti: affluentiAll.length,
+            numReinvestimenti: reinvestimentiAll.length,
+            numPeriodici: periodicAll.length,
           });
         }
-        
+
         return results;
       }),
   }),
