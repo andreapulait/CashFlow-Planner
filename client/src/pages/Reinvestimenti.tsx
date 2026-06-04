@@ -912,21 +912,23 @@ export default function Reinvestimenti() {
 
         {/* Dialog Crea Periodico */}
         <Dialog open={isCreatePeriodicoOpen} onOpenChange={setIsCreatePeriodicoOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl flex flex-col max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Nuovo Reinvestimento Periodico</DialogTitle>
               <DialogDescription>
                 Definisci una regola di trasferimento automatico tra due fiumi
               </DialogDescription>
             </DialogHeader>
-            <ReinvestimentoPeriodicoForm
-              fd={periodicoFormData}
-              setFd={setPeriodicoFormData}
-              fiumi={fiumi}
-              dataInizioPiano={impostazioni?.dataInizio}
-              orizzonteTemporale={impostazioni?.orizzonteTemporale || 60}
-            />
-            <DialogFooter>
+            <div className="overflow-y-auto flex-1 pr-1">
+              <ReinvestimentoPeriodicoForm
+                fd={periodicoFormData}
+                setFd={setPeriodicoFormData}
+                fiumi={fiumi}
+                dataInizioPiano={impostazioni?.dataInizio}
+                orizzonteTemporale={impostazioni?.orizzonteTemporale || 60}
+              />
+            </div>
+            <DialogFooter className="pt-4 border-t mt-2">
               <Button variant="outline" onClick={() => setIsCreatePeriodicoOpen(false)}>Annulla</Button>
               <Button onClick={handleCreatePeriodico} disabled={createPeriodicoMutation.isPending}>
                 {createPeriodicoMutation.isPending ? "Creazione..." : "Crea"}
@@ -937,19 +939,21 @@ export default function Reinvestimenti() {
 
         {/* Dialog Modifica Periodico */}
         <Dialog open={isEditPeriodicoOpen} onOpenChange={setIsEditPeriodicoOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl flex flex-col max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Modifica Reinvestimento Periodico</DialogTitle>
               <DialogDescription>Aggiorna la regola periodica</DialogDescription>
             </DialogHeader>
-            <ReinvestimentoPeriodicoForm
-              fd={periodicoEditFormData}
-              setFd={setPeriodicoEditFormData}
-              fiumi={fiumi}
-              dataInizioPiano={impostazioni?.dataInizio}
-              orizzonteTemporale={impostazioni?.orizzonteTemporale || 60}
-            />
-            <DialogFooter>
+            <div className="overflow-y-auto flex-1 pr-1">
+              <ReinvestimentoPeriodicoForm
+                fd={periodicoEditFormData}
+                setFd={setPeriodicoEditFormData}
+                fiumi={fiumi}
+                dataInizioPiano={impostazioni?.dataInizio}
+                orizzonteTemporale={impostazioni?.orizzonteTemporale || 60}
+              />
+            </div>
+            <DialogFooter className="pt-4 border-t mt-2">
               <Button variant="outline" onClick={() => setIsEditPeriodicoOpen(false)}>Annulla</Button>
               <Button onClick={handleEditPeriodico} disabled={updatePeriodicoMutation.isPending}>
                 {updatePeriodicoMutation.isPending ? "Salvataggio..." : "Salva"}
@@ -960,25 +964,27 @@ export default function Reinvestimenti() {
 
         {/* Dialog Crea */}
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl flex flex-col max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Crea Nuovo Reinvestimento</DialogTitle>
               <DialogDescription>
                 Configura un trasferimento di capitale da un fiume ad un altro
               </DialogDescription>
             </DialogHeader>
-            <ReinvestimentoForm
-              fd={formData}
-              setFd={setFormData}
-              tipo={tipoImporto}
-              setTipo={setTipoImporto}
-              dest={tipoDestinazione}
-              setDest={setTipoDestinazione}
-              fiumi={fiumi}
-              dataInizioPiano={impostazioni?.dataInizio}
-              showAlert={true}
-            />
-            <DialogFooter>
+            <div className="overflow-y-auto flex-1 pr-1">
+              <ReinvestimentoForm
+                fd={formData}
+                setFd={setFormData}
+                tipo={tipoImporto}
+                setTipo={setTipoImporto}
+                dest={tipoDestinazione}
+                setDest={setTipoDestinazione}
+                fiumi={fiumi}
+                dataInizioPiano={impostazioni?.dataInizio}
+                showAlert={true}
+              />
+            </div>
+            <DialogFooter className="pt-4 border-t mt-2">
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Annulla</Button>
               <Button onClick={handleCreate} disabled={createMutation.isPending}>
                 {createMutation.isPending ? "Creazione..." : "Crea"}
@@ -989,24 +995,26 @@ export default function Reinvestimenti() {
 
         {/* Dialog Modifica */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl flex flex-col max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Modifica Reinvestimento</DialogTitle>
               <DialogDescription>
                 Aggiorna i parametri del reinvestimento
               </DialogDescription>
             </DialogHeader>
-            <ReinvestimentoForm
-              fd={editFormData}
-              setFd={setEditFormData}
-              tipo={tipoImportoEdit}
-              setTipo={setTipoImportoEdit}
-              dest={tipoDestinazioneEdit}
-              setDest={setTipoDestinazioneEdit}
-              fiumi={fiumi}
-              dataInizioPiano={impostazioni?.dataInizio}
-            />
-            <DialogFooter>
+            <div className="overflow-y-auto flex-1 pr-1">
+              <ReinvestimentoForm
+                fd={editFormData}
+                setFd={setEditFormData}
+                tipo={tipoImportoEdit}
+                setTipo={setTipoImportoEdit}
+                dest={tipoDestinazioneEdit}
+                setDest={setTipoDestinazioneEdit}
+                fiumi={fiumi}
+                dataInizioPiano={impostazioni?.dataInizio}
+              />
+            </div>
+            <DialogFooter className="pt-4 border-t mt-2">
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>Annulla</Button>
               <Button onClick={handleEdit} disabled={updateMutation.isPending}>
                 {updateMutation.isPending ? "Salvataggio..." : "Salva"}

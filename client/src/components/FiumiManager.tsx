@@ -286,13 +286,15 @@ export function FiumiManager() {
 
       {/* Dialog Crea */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Crea Nuovo Fiume</DialogTitle>
             <DialogDescription>Aggiungi un nuovo flusso di investimento al tuo portafoglio</DialogDescription>
           </DialogHeader>
-          <FiumeForm id="create" />
-          <DialogFooter>
+          <div className="overflow-y-auto flex-1 pr-1">
+            <FiumeForm id="create" />
+          </div>
+          <DialogFooter className="pt-4 border-t mt-2">
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Annulla</Button>
             <Button onClick={handleCreate} disabled={createMutation.isPending}>
               {createMutation.isPending ? "Creazione..." : "Crea"}
@@ -303,13 +305,15 @@ export function FiumiManager() {
 
       {/* Dialog Modifica */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Modifica Fiume</DialogTitle>
             <DialogDescription>Aggiorna i dettagli del flusso di investimento</DialogDescription>
           </DialogHeader>
-          <FiumeForm id="edit" />
-          <DialogFooter>
+          <div className="overflow-y-auto flex-1 pr-1">
+            <FiumeForm id="edit" />
+          </div>
+          <DialogFooter className="pt-4 border-t mt-2">
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>Annulla</Button>
             <Button onClick={handleEdit} disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Salvataggio..." : "Salva"}
