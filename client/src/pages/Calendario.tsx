@@ -24,7 +24,7 @@ const localizer = dateFnsLocalizer({
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
 
-type EventTipo = "reinvestimento_puntuale" | "reinvestimento_periodico" | "affluente";
+type EventTipo = "fiume_attivazione" | "reinvestimento_puntuale" | "reinvestimento_periodico" | "affluente";
 
 interface CalendarEvent {
   id: string;
@@ -83,6 +83,29 @@ export default function Calendario() {
   const events: CalendarEvent[] = useMemo(() => {
     if (!impostazioni) return [];
     const list: CalendarEvent[] = [];
+
+    // ── 0. Attivazione fiumi ──────────────────────────────────────────────
+    if (fiumi) {
+      fiumi.forEach(fiume => {
+        const eventDate = fiume.dataCreazione
+          ? new Date(fiume.dataCreazione)
+          : meseToDate(fiume.meseCreazione);
+
+        list.push({
+          id: `fiume-${fiume.id}`,
+          title: `▶ ${fiume.nome}`,
+          start: eventDate,
+          end: eventDate,
+          resource: {
+            tipo: "fiume_attivazione",
+            fiumeNome: fiume.nome,
+            importo: fiume.sorgente,
+            descrizione: `Rendimento: ${(fiume.rendimento / 100).toFixed(2)}% · Reinvest.: ${fiume.percentualeReinvestimento ?? 100}%`,
+            href: "/fiumi",
+          },
+        });
+      });
+    }
 
     // ── 1. Reinvestimenti puntuali ─────────────────────────────────────────
     if (reinvestimenti && fiumi) {
@@ -174,6 +197,7 @@ export default function Calendario() {
 
   const eventStyleGetter = (event: CalendarEvent) => {
     const colorMap: Record<EventTipo, string> = {
+      fiume_attivazione:        "#10b981",  // verde
       reinvestimento_puntuale:  "#f59e0b",  // ambra
       reinvestimento_periodico: "#8b5cf6",  // viola
       affluente:                "#3b82f6",  // blu
@@ -203,18 +227,21 @@ export default function Calendario() {
   const prossimi = future.slice(0, 5);
 
   const tipoIcone: Record<EventTipo, React.ReactElement> = {
+    fiume_attivazione:        <CalendarDays className="h-4 w-4 text-emerald-600" />,
     reinvestimento_puntuale:  <ArrowRightLeft className="h-4 w-4 text-amber-600" />,
     reinvestimento_periodico: <RefreshCw className="h-4 w-4 text-violet-600" />,
     affluente:                <Wallet className="h-4 w-4 text-blue-600" />,
   };
 
   const tipoLabel: Record<EventTipo, string> = {
+    fiume_attivazione:        "Attivazione fiume",
     reinvestimento_puntuale:  "Reinvestimento",
     reinvestimento_periodico: "Rein. periodico",
     affluente:                "Affluente",
   };
 
   const tipoBadgeVariant: Record<EventTipo, "default" | "secondary" | "outline"> = {
+    fiume_attivazione:        "secondary",
     reinvestimento_puntuale:  "default",
     reinvestimento_periodico: "outline",
     affluente:                "secondary",
@@ -247,11 +274,17 @@ export default function Calendario() {
         </div>
 
         {/* KPI */}
-        <div className="grid gap-4 md:grid-cols-4 mb-6">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Totale eventi</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold">{events.length}</div>
               <p className="text-xs text-muted-foreground">nel piano completo</p></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-emerald-600">Fiumi</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold text-emerald-600">
+              {events.filter(e => e.resource.tipo === "fiume_attivazione").length}</div>
+              <p className="text-xs text-muted-foreground">attivazioni</p></CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-blue-600">Affluenti</CardTitle></CardHeader>
@@ -269,7 +302,7 @@ export default function Calendario() {
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-violet-600">Periodici</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold text-violet-600">
               {events.filter(e => e.resource.tipo === "reinvestimento_periodico").length}</div>
-              <p className="text-xs text-muted-foreground">occorrenze regole periodiche</p></CardContent>
+              <p className="text-xs text-muted-foreground">occorrenze periodiche</p></CardContent>
           </Card>
         </div>
 
@@ -317,6 +350,10 @@ export default function Calendario() {
             <CardTitle>Vista Calendario</CardTitle>
             <CardDescription>
               <div className="flex flex-wrap items-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+                  <span className="text-xs">Attivazione fiume</span>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-blue-500" />
                   <span className="text-xs">Affluenti</span>
