@@ -316,7 +316,11 @@ export default function Calendario() {
             <CardContent>
               <div className="space-y-2">
                 {prossimi.map(evento => (
-                  <div key={evento.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                  <div
+                    key={evento.id}
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setSelectedEvent(evento)}
+                  >
                     <div className="flex items-center gap-3">
                       {tipoIcone[evento.resource.tipo]}
                       <div>
