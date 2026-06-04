@@ -45,7 +45,7 @@ const ANALISI_ITEMS = [
   { href: "/simulazione", icon: LineChart,    label: "Simulazione" },
   { href: "/analytics",   icon: TrendingUp,   label: "Analytics" },
   { href: "/flussi",      icon: Network,      label: "Flussi" },
-  { href: "/scenari",     icon: Layers,       label: "Scenari" },
+  // { href: "/scenari", icon: Layers, label: "Scenari" }, // nascosto — da reimplementare come sandbox what-if
   { href: "/calendario",  icon: CalendarDays, label: "Calendario" },
 ];
 
