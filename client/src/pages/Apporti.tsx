@@ -377,13 +377,14 @@ export default function Apporti() {
                     <Plus className="mr-2 h-4 w-4" />
                     Nuovo Affluente
                   </Button>
-                  <DialogContent className="max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="flex flex-col max-h-[90vh]">
                     <DialogHeader>
                       <DialogTitle>Crea Nuovo Affluente</DialogTitle>
                       <DialogDescription>
                         Aggiungi un affluente di capitale programmato per un fiume di investimento
                       </DialogDescription>
                     </DialogHeader>
+                    <div className="overflow-y-auto flex-1 pr-1">
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
                         <Label htmlFor="fiume">Fiume di Investimento</Label>
@@ -592,18 +593,19 @@ export default function Apporti() {
                         )}
                       </div>
                     </div>
-                    <DialogFooter>
+                    </div>
+                    <DialogFooter className="pt-4 border-t mt-2">
                       <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                         Annulla
                       </Button>
-                      <Button 
-                        onClick={handleCreate} 
+                      <Button
+                        onClick={handleCreate}
                         disabled={createMutation.isPending || createRicorrenteMutation.isPending}
                       >
-                        {(createMutation.isPending || createRicorrenteMutation.isPending) 
-                          ? "Creazione..." 
-                          : formData.ricorrente 
-                            ? "Crea Affluenti Ricorrenti" 
+                        {(createMutation.isPending || createRicorrenteMutation.isPending)
+                          ? "Creazione..."
+                          : formData.ricorrente
+                            ? "Crea Affluenti Ricorrenti"
                             : "Crea"
                         }
                       </Button>
@@ -874,43 +876,45 @@ export default function Apporti() {
 
         {/* Edit Dialog */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent className="flex flex-col max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Modifica Affluente</DialogTitle>
               <DialogDescription>Aggiorna i dettagli dell'affluente di capitale</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-importo">Importo (€)</Label>
-                <Input
-                  id="edit-importo"
-                  type="number"
-                  value={formData.importo}
-                  onChange={(e) => setFormData({ ...formData, importo: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-dataAffluente">Data Apporto</Label>
-                <MonthYearPicker
-                  value={formData.dataAffluente}
-                  onChange={(date) => setFormData({ ...formData, dataAffluente: date })}
-                  placeholder="Seleziona mese apporto"
-                  minDate={impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date()}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Scegli quando effettuare questo apporto. Se non specificato, usa offset mensile.
-                </p>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-descrizione">Descrizione</Label>
-                <Input
-                  id="edit-descrizione"
-                  value={formData.descrizione}
-                  onChange={(e) => setFormData({ ...formData, descrizione: e.target.value })}
-                />
+            <div className="overflow-y-auto flex-1 pr-1">
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-importo">Importo (€)</Label>
+                  <Input
+                    id="edit-importo"
+                    type="number"
+                    value={formData.importo}
+                    onChange={(e) => setFormData({ ...formData, importo: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-dataAffluente">Data Apporto</Label>
+                  <MonthYearPicker
+                    value={formData.dataAffluente}
+                    onChange={(date) => setFormData({ ...formData, dataAffluente: date })}
+                    placeholder="Seleziona mese apporto"
+                    minDate={impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date()}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Scegli quando effettuare questo apporto. Se non specificato, usa offset mensile.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-descrizione">Descrizione</Label>
+                  <Input
+                    id="edit-descrizione"
+                    value={formData.descrizione}
+                    onChange={(e) => setFormData({ ...formData, descrizione: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="pt-4 border-t mt-2">
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                 Annulla
               </Button>
@@ -923,13 +927,14 @@ export default function Apporti() {
 
         {/* Dialog Modifica Gruppo */}
         <Dialog open={isEditGroupOpen} onOpenChange={setIsEditGroupOpen}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent className="flex flex-col max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Modifica Gruppo Affluenti Ricorrenti</DialogTitle>
               <DialogDescription>
                 Le modifiche verranno applicate a tutti gli affluenti del gruppo
               </DialogDescription>
             </DialogHeader>
+            <div className="overflow-y-auto flex-1 pr-1">
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="group-importo">Importo (€)</Label>
@@ -1052,11 +1057,12 @@ export default function Apporti() {
                 )}
               </div>
             </div>
-            <DialogFooter>
+            </div>
+            <DialogFooter className="pt-4 border-t mt-2">
               <Button variant="outline" onClick={() => setIsEditGroupOpen(false)}>
                 Annulla
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   if (!editingGroup) return;
                   const importoCents = Math.round(parseFloat(groupFormData.importo) * 100);
