@@ -9,6 +9,7 @@ import {
   alertConfig,
   scenari,
   scenarioSnapshots,
+  eventiReali,
   users,
   passwordResetTokens,
 } from "../drizzle/schema";
@@ -1415,4 +1416,45 @@ export async function markPasswordResetTokenUsed(id: number) {
   await db.update(passwordResetTokens)
     .set({ used: 1 })
     .where(eq(passwordResetTokens.id, id));
+}
+
+// ============================================================================
+// EVENTI REALI (Monitoraggio)
+// ============================================================================
+
+export async function getEventiRealiByUserId(userId: number) {
+  return db.select().from(eventiReali)
+    .where(eq(eventiReali.userId, userId))
+    .orderBy(desc(eventiReali.data));
+}
+
+export async function createEventoReale(params: {
+  userId: number;
+  fiumeId?: number | null;
+  tipo: string;
+  importo: number;
+  data: Date;
+  descrizione?: string | null;
+}) {
+  const result = await db.insert(eventiReali).values(params).returning();
+  return result[0];
+}
+
+export async function updateEventoReale(id: number, userId: number, params: {
+  tipo?: string;
+  importo?: number;
+  data?: Date;
+  fiumeId?: number | null;
+  descrizione?: string | null;
+}) {
+  const result = await db.update(eventiReali)
+    .set({ ...params, updatedAt: new Date() })
+    .where(and(eq(eventiReali.id, id), eq(eventiReali.userId, userId)))
+    .returning();
+  return result[0];
+}
+
+export async function deleteEventoReale(id: number, userId: number) {
+  await db.delete(eventiReali)
+    .where(and(eq(eventiReali.id, id), eq(eventiReali.userId, userId)));
 }

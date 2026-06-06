@@ -221,6 +221,26 @@ export const alertConfig = pgTable("alertConfig", {
 export type AlertConfig = typeof alertConfig.$inferSelect;
 export type InsertAlertConfig = typeof alertConfig.$inferInsert;
 
+export const eventiReali = pgTable("eventiReali", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  fiumeId: integer("fiumeId").references(() => fiumi.id, { onDelete: "set null" }),
+  /** 'apporto' | 'rendita' | 'capitale' | 'prelievo' */
+  tipo: varchar("tipo", { length: 20 }).notNull(),
+  /** Importo in centesimi */
+  importo: integer("importo").notNull(),
+  /** Data reale dell'evento */
+  data: timestamp("data").notNull(),
+  descrizione: text("descrizione"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type EventoReale = typeof eventiReali.$inferSelect;
+export type InsertEventoReale = typeof eventiReali.$inferInsert;
+
 export const passwordResetTokens = pgTable("passwordResetTokens", {
   id: serial("id").primaryKey(),
   userId: integer("userId")

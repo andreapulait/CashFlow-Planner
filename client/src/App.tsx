@@ -13,7 +13,7 @@ import Impostazioni from "./pages/Impostazioni";
 import Apporti from "@/pages/Apporti";
 import Reinvestimenti from "@/pages/Reinvestimenti";
 import FlussiVisualizzazione from "@/pages/FlussiVisualizzazione";
-import Scenari from "@/pages/Scenari";
+import Monitoraggio from "@/pages/Monitoraggio";
 import Calendario from "@/pages/Calendario";
 import Alert from "@/pages/Alert";
 import ResetPassword from "@/pages/ResetPassword";
@@ -31,7 +31,7 @@ function Router() {
       <Route path="/apporti" component={Apporti} />
       <Route path="/reinvestimenti" component={Reinvestimenti} />
       <Route path="/flussi" component={FlussiVisualizzazione} />
-      <Route path="/scenari" component={Scenari} />
+      <Route path="/monitoraggio" component={Monitoraggio} />
       <Route path="/calendario" component={Calendario} />
       <Route path="/alert" component={Alert} />
       <Route path="/reset-password" component={ResetPassword} />

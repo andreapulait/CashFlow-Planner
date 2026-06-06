@@ -1697,6 +1697,125 @@ export const appRouter = router({
       }),
   }),
 
+  // ─── Monitoraggio (piano vs reale) ──────────────────────────────────────────
+  monitoraggio: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.getEventiRealiByUserId(ctx.user.id);
+    }),
+
+    create: protectedProcedure
+      .input(z.object({
+        tipo: z.enum(['apporto', 'rendita', 'capitale', 'prelievo']),
+        importo: z.number().int().positive(),
+        data: z.coerce.date(),
+        fiumeId: z.number().int().positive().optional(),
+        descrizione: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return db.createEventoReale({
+          userId: ctx.user.id,
+          tipo: input.tipo,
+          importo: input.importo,
+          data: input.data,
+          fiumeId: input.fiumeId ?? null,
+          descrizione: input.descrizione ?? null,
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        tipo: z.enum(['apporto', 'rendita', 'capitale', 'prelievo']).optional(),
+        importo: z.number().int().positive().optional(),
+        data: z.coerce.date().optional(),
+        fiumeId: z.number().int().positive().nullable().optional(),
+        descrizione: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...data } = input;
+        return db.updateEventoReale(id, ctx.user.id, data);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.deleteEventoReale(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
+    confronto: protectedProcedure.query(async ({ ctx }) => {
+      const imp = await db.getImpostazioniByUserId(ctx.user.id);
+      const { fiumiStates, fiumiRendite, allFiumi, affluentiByFiume } =
+        await runSimulazione(ctx.user.id, imp.orizzonteTemporale);
+
+      const eventi = await db.getEventiRealiByUserId(ctx.user.id);
+      const dataInizio = imp.dataInizio ? new Date(imp.dataInizio) : new Date('2026-01-01');
+
+      // Calcola mese relativo per ogni evento reale
+      const eventiConMese = eventi.map(e => {
+        const d = new Date(e.data);
+        const mese =
+          (d.getFullYear() - dataInizio.getFullYear()) * 12 +
+          (d.getMonth() - dataInizio.getMonth());
+        return { ...e, mese };
+      });
+
+      const eventiByMese = new Map<number, typeof eventiConMese>();
+      for (const e of eventiConMese) {
+        if (!eventiByMese.has(e.mese)) eventiByMese.set(e.mese, []);
+        eventiByMese.get(e.mese)!.push(e);
+      }
+
+      const lastEventMese = eventiConMese.length > 0
+        ? Math.max(...eventiConMese.map(e => e.mese))
+        : -1;
+      const maxMese = Math.max(imp.orizzonteTemporale, lastEventMese);
+
+      const result = [];
+      for (let mese = 0; mese <= maxMese; mese++) {
+        // ── Pianificato ──
+        let patrimonioPianificato = 0;
+        let renditaPianificata = 0;
+        let apportiPianificati = 0;
+
+        for (const [, stateMap] of Array.from(fiumiStates.entries()))
+          patrimonioPianificato += stateMap.get(mese) || 0;
+        for (const [, renditeMap] of Array.from(fiumiRendite.entries()))
+          renditaPianificata += renditeMap.get(mese) || 0;
+        for (const fiume of allFiumi) {
+          if (mese === fiume.meseCreazione) apportiPianificati += fiume.sorgente / 100;
+          apportiPianificati += affluentiByFiume.get(fiume.id)?.get(mese) || 0;
+        }
+
+        // ── Reale ──
+        const eventiMese = eventiByMese.get(mese) || [];
+        const capitaleEvts = eventiMese.filter(e => e.tipo === 'capitale');
+        const patrimonioReale = capitaleEvts.length > 0
+          ? capitaleEvts.reduce((s, e) => s + e.importo, 0) / 100 / capitaleEvts.length
+          : null;
+        const renditaReale = eventiMese.filter(e => e.tipo === 'rendita')
+          .reduce((s, e) => s + e.importo, 0) / 100 || null;
+        const apportiReali = eventiMese.filter(e => e.tipo === 'apporto')
+          .reduce((s, e) => s + e.importo, 0) / 100 || null;
+        const prelieviReali = eventiMese.filter(e => e.tipo === 'prelievo')
+          .reduce((s, e) => s + e.importo, 0) / 100 || null;
+
+        result.push({
+          mese,
+          patrimonioPianificato: Math.round(patrimonioPianificato * 100) / 100,
+          patrimonioReale,
+          renditaPianificata: Math.round(renditaPianificata * 100) / 100,
+          renditaReale,
+          apportiPianificati: Math.round(apportiPianificati * 100) / 100,
+          apportiReali,
+          prelieviReali,
+        });
+      }
+
+      return result;
+    }),
+  }),
+
   // Data Management: Import/Export
   dataManagement: router({
     // Export all user data

@@ -26,7 +26,6 @@ import {
   LogOut,
   ArrowRightLeft,
   Network,
-  Layers,
   CalendarDays,
   ChevronDown,
   Database,
@@ -34,6 +33,7 @@ import {
   Bell,
   Menu,
   BellRing,
+  Activity,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -42,11 +42,11 @@ import NotificationCenter from "./NotificationCenter";
 // ─── Struttura menu ───────────────────────────────────────────────────────────
 
 const ANALISI_ITEMS = [
-  { href: "/simulazione", icon: LineChart,    label: "Simulazione" },
-  { href: "/analytics",   icon: TrendingUp,   label: "Analytics" },
-  { href: "/flussi",      icon: Network,      label: "Flussi" },
-  // { href: "/scenari", icon: Layers, label: "Scenari" }, // nascosto — da reimplementare come sandbox what-if
-  { href: "/calendario",  icon: CalendarDays, label: "Calendario" },
+  { href: "/simulazione",   icon: LineChart,    label: "Simulazione" },
+  { href: "/analytics",     icon: TrendingUp,   label: "Analytics" },
+  { href: "/flussi",        icon: Network,      label: "Flussi" },
+  { href: "/monitoraggio",  icon: Activity,     label: "Monitoraggio" },
+  { href: "/calendario",    icon: CalendarDays, label: "Calendario" },
 ];
 
 const GESTIONE_ITEMS = [

@@ -165,6 +165,19 @@ CREATE TABLE IF NOT EXISTS "passwordResetTokens" (
   "createdAt" TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
+-- ── Eventi Reali (Monitoraggio) ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "eventiReali" (
+  "id"          SERIAL PRIMARY KEY,
+  "userId"      INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "fiumeId"     INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
+  "tipo"        VARCHAR(20) NOT NULL,
+  "importo"     INTEGER NOT NULL,
+  "data"        TIMESTAMP NOT NULL,
+  "descrizione" TEXT,
+  "createdAt"   TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updatedAt"   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- ── Indici utili ─────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS "idx_fiumi_userId"        ON "fiumi"("userId");
 CREATE INDEX IF NOT EXISTS "idx_affluenti_fiumeId"   ON "affluenti"("fiumeId");
