@@ -97,8 +97,11 @@ export default function Navigation() {
 
         {/* Logo */}
         <Link href="/">
-          <span className="text-base font-bold text-foreground whitespace-nowrap cursor-pointer">
-            {APP_TITLE}
+          <span className="flex items-center gap-2 cursor-pointer">
+            <img src="/logo.svg" alt="logo" className="h-8 w-8 shrink-0" />
+            <span className="text-base font-bold text-foreground whitespace-nowrap hidden sm:inline">
+              {APP_TITLE}
+            </span>
           </span>
         </Link>
 
