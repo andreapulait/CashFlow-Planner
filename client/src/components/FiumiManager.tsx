@@ -33,6 +33,94 @@ const emptyForm = (): FormData => ({
   creaAlert: false, giorniPreavviso: "7",
 });
 
+// ─── FiumeForm (a livello modulo — NON dentro FiumiManager) ──────────────────
+// Deve stare fuori per evitare che React smonta/rimonta il form ad ogni render
+// del componente padre (che causerebbe la perdita del focus ad ogni keystroke).
+
+interface FiumeFormProps {
+  id: string;
+  formData: FormData;
+  setFormData: (f: FormData) => void;
+  impostazioni?: { dataInizio?: string | Date | null };
+}
+
+function FiumeForm({ id, formData, setFormData, impostazioni }: FiumeFormProps) {
+  return (
+    <div className="grid gap-4 py-4">
+      <div className="grid gap-2">
+        <Label htmlFor={`${id}-nome`}>Nome *</Label>
+        <Input id={`${id}-nome`} value={formData.nome}
+          onChange={e => setFormData({ ...formData, nome: e.target.value })}
+          placeholder="es. Dividendi Azionari" />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor={`${id}-sorgente`}>Capitale Iniziale (€)</Label>
+        <Input id={`${id}-sorgente`} type="number" value={formData.sorgente}
+          onChange={e => setFormData({ ...formData, sorgente: e.target.value })}
+          placeholder="es. 10000" />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor={`${id}-rendimento`}>Rendimento Annuo (%)</Label>
+        <Input id={`${id}-rendimento`} type="number" step="0.01" value={formData.rendimento}
+          onChange={e => setFormData({ ...formData, rendimento: e.target.value })}
+          placeholder="es. 8.00" />
+      </div>
+      <div className="grid gap-2">
+        <Label>Data di Inizio</Label>
+        <MonthYearPicker
+          value={formData.dataCreazione}
+          onChange={date => setFormData({ ...formData, dataCreazione: date })}
+          placeholder="Seleziona mese di inizio"
+          minDate={impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date()}
+        />
+        <p className="text-xs text-muted-foreground">Mese in cui questo fiume inizia a produrre rendita nel piano.</p>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor={`${id}-reinv`}>Reinvestimento Automatico (%)</Label>
+        <Input id={`${id}-reinv`} type="number" min="0" max="100" step="1"
+          value={formData.percentualeReinvestimento}
+          onChange={e => setFormData({ ...formData, percentualeReinvestimento: e.target.value })} />
+        <p className="text-xs text-muted-foreground">
+          Quota della rendita mensile reinvestita nel fiume (100% = tutto torna in capitale).
+        </p>
+      </div>
+
+      {/* Alert automatico — solo in creazione (richiede dataCreazione) */}
+      {id === "create" && (
+        <div className="border-t pt-4 mt-2">
+          <div className="flex items-center space-x-2 mb-3">
+            <input
+              type="checkbox"
+              id={`${id}-creaAlert`}
+              checked={formData.creaAlert}
+              onChange={e => setFormData({ ...formData, creaAlert: e.target.checked })}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <Label htmlFor={`${id}-creaAlert`} className="font-medium cursor-pointer">
+              Crea Alert Automatico
+            </Label>
+          </div>
+          {formData.creaAlert && (
+            <div className="pl-6 grid gap-2">
+              <Label htmlFor={`${id}-giorni`}>Giorni di Preavviso</Label>
+              <Input
+                id={`${id}-giorni`}
+                type="number" min="1" max="30"
+                value={formData.giorniPreavviso}
+                onChange={e => setFormData({ ...formData, giorniPreavviso: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Riceverai una notifica {formData.giorniPreavviso} giorni prima dell'attivazione del fiume.
+                Richiede che sia impostata la Data di Inizio.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FiumiManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -135,81 +223,6 @@ export function FiumiManager() {
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(v);
 
-  const FiumeForm = ({ id }: { id: string }) => (
-    <div className="grid gap-4 py-4">
-      <div className="grid gap-2">
-        <Label htmlFor={`${id}-nome`}>Nome *</Label>
-        <Input id={`${id}-nome`} value={formData.nome}
-          onChange={e => setFormData({ ...formData, nome: e.target.value })}
-          placeholder="es. Dividendi Azionari" />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor={`${id}-sorgente`}>Capitale Iniziale (€)</Label>
-        <Input id={`${id}-sorgente`} type="number" value={formData.sorgente}
-          onChange={e => setFormData({ ...formData, sorgente: e.target.value })}
-          placeholder="es. 10000" />
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor={`${id}-rendimento`}>Rendimento Annuo (%)</Label>
-        <Input id={`${id}-rendimento`} type="number" step="0.01" value={formData.rendimento}
-          onChange={e => setFormData({ ...formData, rendimento: e.target.value })}
-          placeholder="es. 8.00" />
-      </div>
-      <div className="grid gap-2">
-        <Label>Data di Inizio</Label>
-        <MonthYearPicker
-          value={formData.dataCreazione}
-          onChange={date => setFormData({ ...formData, dataCreazione: date })}
-          placeholder="Seleziona mese di inizio"
-          minDate={impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date()}
-        />
-        <p className="text-xs text-muted-foreground">Mese in cui questo fiume inizia a produrre rendita nel piano.</p>
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor={`${id}-reinv`}>Reinvestimento Automatico (%)</Label>
-        <Input id={`${id}-reinv`} type="number" min="0" max="100" step="1"
-          value={formData.percentualeReinvestimento}
-          onChange={e => setFormData({ ...formData, percentualeReinvestimento: e.target.value })} />
-        <p className="text-xs text-muted-foreground">
-          Quota della rendita mensile reinvestita nel fiume (100% = tutto torna in capitale).
-        </p>
-      </div>
-
-      {/* Alert automatico — solo in creazione (richiede dataCreazione) */}
-      {id === "create" && (
-        <div className="border-t pt-4 mt-2">
-          <div className="flex items-center space-x-2 mb-3">
-            <input
-              type="checkbox"
-              id={`${id}-creaAlert`}
-              checked={formData.creaAlert}
-              onChange={e => setFormData({ ...formData, creaAlert: e.target.checked })}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            <Label htmlFor={`${id}-creaAlert`} className="font-medium cursor-pointer">
-              Crea Alert Automatico
-            </Label>
-          </div>
-          {formData.creaAlert && (
-            <div className="pl-6 grid gap-2">
-              <Label htmlFor={`${id}-giorni`}>Giorni di Preavviso</Label>
-              <Input
-                id={`${id}-giorni`}
-                type="number" min="1" max="30"
-                value={formData.giorniPreavviso}
-                onChange={e => setFormData({ ...formData, giorniPreavviso: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Riceverai una notifica {formData.giorniPreavviso} giorni prima dell'attivazione del fiume.
-                Richiede che sia impostata la Data di Inizio.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <>
       <Card>
@@ -292,7 +305,7 @@ export function FiumiManager() {
             <DialogDescription>Aggiungi un nuovo flusso di investimento al tuo portafoglio</DialogDescription>
           </DialogHeader>
           <div className="overflow-y-auto flex-1 pr-1">
-            <FiumeForm id="create" />
+            <FiumeForm id="create" formData={formData} setFormData={setFormData} impostazioni={impostazioni} />
           </div>
           <DialogFooter className="pt-4 border-t mt-2">
             <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Annulla</Button>
@@ -311,7 +324,7 @@ export function FiumiManager() {
             <DialogDescription>Aggiorna i dettagli del flusso di investimento</DialogDescription>
           </DialogHeader>
           <div className="overflow-y-auto flex-1 pr-1">
-            <FiumeForm id="edit" />
+            <FiumeForm id="edit" formData={formData} setFormData={setFormData} impostazioni={impostazioni} />
           </div>
           <DialogFooter className="pt-4 border-t mt-2">
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>Annulla</Button>
