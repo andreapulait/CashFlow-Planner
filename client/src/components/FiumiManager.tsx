@@ -51,7 +51,8 @@ function FiumeForm({ id, formData, setFormData, impostazioni }: FiumeFormProps) 
         <Label htmlFor={`${id}-nome`}>Nome *</Label>
         <Input id={`${id}-nome`} value={formData.nome}
           onChange={e => setFormData({ ...formData, nome: e.target.value })}
-          placeholder="es. Dividendi Azionari" />
+          placeholder="es. Dividendi Azionari"
+          autoComplete="off" />
       </div>
       <div className="grid gap-2">
         <Label htmlFor={`${id}-sorgente`}>Capitale Iniziale (€)</Label>
@@ -304,7 +305,7 @@ export function FiumiManager() {
             <DialogTitle>Crea Nuovo Fiume</DialogTitle>
             <DialogDescription>Aggiungi un nuovo flusso di investimento al tuo portafoglio</DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto flex-1 pr-1">
+          <div className="overflow-y-auto flex-1 px-1">
             <FiumeForm id="create" formData={formData} setFormData={setFormData} impostazioni={impostazioni} />
           </div>
           <DialogFooter className="pt-4 border-t mt-2">
@@ -323,7 +324,7 @@ export function FiumiManager() {
             <DialogTitle>Modifica Fiume</DialogTitle>
             <DialogDescription>Aggiorna i dettagli del flusso di investimento</DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto flex-1 pr-1">
+          <div className="overflow-y-auto flex-1 px-1">
             <FiumeForm id="edit" formData={formData} setFormData={setFormData} impostazioni={impostazioni} />
           </div>
           <DialogFooter className="pt-4 border-t mt-2">

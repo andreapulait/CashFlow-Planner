@@ -384,7 +384,7 @@ export default function Apporti() {
                         Aggiungi un affluente di capitale programmato per un fiume di investimento
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="overflow-y-auto flex-1 pr-1">
+                    <div className="overflow-y-auto flex-1 px-1">
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
                         <Label htmlFor="fiume">Fiume di Investimento</Label>
@@ -440,6 +440,7 @@ export default function Apporti() {
                           value={formData.descrizione}
                           onChange={(e) => setFormData({ ...formData, descrizione: e.target.value })}
                           placeholder="es. Bonus annuale"
+                          autoComplete="off"
                         />
                       </div>
                       
@@ -881,7 +882,7 @@ export default function Apporti() {
               <DialogTitle>Modifica Affluente</DialogTitle>
               <DialogDescription>Aggiorna i dettagli dell'affluente di capitale</DialogDescription>
             </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-1">
+            <div className="overflow-y-auto flex-1 px-1">
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="edit-importo">Importo (€)</Label>
@@ -934,7 +935,7 @@ export default function Apporti() {
                 Le modifiche verranno applicate a tutti gli affluenti del gruppo
               </DialogDescription>
             </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-1">
+            <div className="overflow-y-auto flex-1 px-1">
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="group-importo">Importo (€)</Label>

@@ -919,7 +919,7 @@ export default function Reinvestimenti() {
                 Definisci una regola di trasferimento automatico tra due fiumi
               </DialogDescription>
             </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-1">
+            <div className="overflow-y-auto flex-1 px-1">
               <ReinvestimentoPeriodicoForm
                 fd={periodicoFormData}
                 setFd={setPeriodicoFormData}
@@ -944,7 +944,7 @@ export default function Reinvestimenti() {
               <DialogTitle>Modifica Reinvestimento Periodico</DialogTitle>
               <DialogDescription>Aggiorna la regola periodica</DialogDescription>
             </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-1">
+            <div className="overflow-y-auto flex-1 px-1">
               <ReinvestimentoPeriodicoForm
                 fd={periodicoEditFormData}
                 setFd={setPeriodicoEditFormData}
@@ -971,7 +971,7 @@ export default function Reinvestimenti() {
                 Configura un trasferimento di capitale da un fiume ad un altro
               </DialogDescription>
             </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-1">
+            <div className="overflow-y-auto flex-1 px-1">
               <ReinvestimentoForm
                 fd={formData}
                 setFd={setFormData}
@@ -1002,7 +1002,7 @@ export default function Reinvestimenti() {
                 Aggiorna i parametri del reinvestimento
               </DialogDescription>
             </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-1">
+            <div className="overflow-y-auto flex-1 px-1">
               <ReinvestimentoForm
                 fd={editFormData}
                 setFd={setEditFormData}
