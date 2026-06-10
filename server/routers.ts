@@ -1814,8 +1814,10 @@ export const appRouter = router({
         // ── Reale ──
         const eventiMese = eventiByMese.get(mese) || [];
         const capitaleEvts = eventiMese.filter(e => e.tipo === 'capitale');
+        // Somma gli importi: ogni evento "capitale" rappresenta il valore di UN fiume,
+        // la somma di tutti dà il patrimonio totale reale del mese.
         const patrimonioReale = capitaleEvts.length > 0
-          ? capitaleEvts.reduce((s, e) => s + e.importo, 0) / 100 / capitaleEvts.length
+          ? capitaleEvts.reduce((s, e) => s + e.importo, 0) / 100
           : null;
         const renditaReale = eventiMese.filter(e => e.tipo === 'rendita')
           .reduce((s, e) => s + e.importo, 0) / 100 || null;

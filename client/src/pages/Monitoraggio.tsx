@@ -87,10 +87,10 @@ const fmt = (v: number | null) =>
     ? "—"
     : v.toLocaleString("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
-const fmtDelta = (reale: number | null, pianificato: number) => {
-  if (reale == null) return null;
+const fmtDelta = (reale: number | null, pianificato: number | null) => {
+  if (reale == null || pianificato == null) return null;
   const delta = reale - pianificato;
-  const pct = pianificato !== 0 ? (delta / pianificato) * 100 : 0;
+  const pct = pianificato !== 0 ? (delta / pianificato) * 100 : null;
   return { delta, pct };
 };
 
@@ -308,17 +308,16 @@ export default function Monitoraggio() {
     };
   });
 
-  // ─── KPI ultimo mese con dati reali ───────────────────────────────────────
+  // ─── KPI: lookup separato per patrimonio e rendita ────────────────────────
 
-  const ultimoMeseConDati = confronto?.slice().reverse().find(r =>
-    r.patrimonioReale != null || r.renditaReale != null || r.apportiReali != null
-  );
+  const ultimoMesePatrimonio = confronto?.slice().reverse().find(r => r.patrimonioReale != null);
+  const ultimoMeseRendita    = confronto?.slice().reverse().find(r => r.renditaReale != null);
 
-  const kpiPatrimonio = ultimoMeseConDati?.patrimonioPianificato != null
-    ? fmtDelta(ultimoMeseConDati.patrimonioReale, ultimoMeseConDati.patrimonioPianificato)
+  const kpiPatrimonio = ultimoMesePatrimonio
+    ? fmtDelta(ultimoMesePatrimonio.patrimonioReale, ultimoMesePatrimonio.patrimonioPianificato)
     : null;
-  const kpiRendita = ultimoMeseConDati?.renditaPianificata != null
-    ? fmtDelta(ultimoMeseConDati.renditaReale, ultimoMeseConDati.renditaPianificata)
+  const kpiRendita = ultimoMeseRendita
+    ? fmtDelta(ultimoMeseRendita.renditaReale, ultimoMeseRendita.renditaPianificata)
     : null;
 
   // ─── Piano programmato: calcolo date e sorting ────────────────────────────
@@ -411,22 +410,26 @@ export default function Monitoraggio() {
       </div>
 
       {/* KPI cards */}
-      {ultimoMeseConDati && (
+      {(ultimoMesePatrimonio || ultimoMeseRendita) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <KpiCard
-            label="Patrimonio vs piano"
-            meseLabel={meseToLabel(ultimoMeseConDati.mese)}
-            delta={kpiPatrimonio}
-            reale={ultimoMeseConDati.patrimonioReale}
-            pianificato={ultimoMeseConDati.patrimonioPianificato}
-          />
-          <KpiCard
-            label="Rendita vs piano"
-            meseLabel={meseToLabel(ultimoMeseConDati.mese)}
-            delta={kpiRendita}
-            reale={ultimoMeseConDati.renditaReale}
-            pianificato={ultimoMeseConDati.renditaPianificata}
-          />
+          {ultimoMesePatrimonio && (
+            <KpiCard
+              label="Patrimonio vs piano"
+              meseLabel={meseToLabel(ultimoMesePatrimonio.mese)}
+              delta={kpiPatrimonio}
+              reale={ultimoMesePatrimonio.patrimonioReale}
+              pianificato={ultimoMesePatrimonio.patrimonioPianificato}
+            />
+          )}
+          {ultimoMeseRendita && (
+            <KpiCard
+              label="Rendita vs piano"
+              meseLabel={meseToLabel(ultimoMeseRendita.mese)}
+              delta={kpiRendita}
+              reale={ultimoMeseRendita.renditaReale}
+              pianificato={ultimoMeseRendita.renditaPianificata}
+            />
+          )}
         </div>
       )}
 
@@ -510,7 +513,7 @@ export default function Monitoraggio() {
                             <TableCell className="text-right text-sm">
                               {d ? (
                                 <span className={d.delta >= 0 ? "text-green-600" : "text-red-600"}>
-                                  {d.delta >= 0 ? "+" : ""}{fmt(d.delta)} ({d.pct.toFixed(1)}%)
+                                  {d.delta >= 0 ? "+" : ""}{fmt(d.delta)}{d.pct != null ? ` (${d.pct.toFixed(1)}%)` : ""}
                                 </span>
                               ) : "—"}
                             </TableCell>
@@ -744,7 +747,7 @@ export default function Monitoraggio() {
 function KpiCard({ label, meseLabel, delta, reale, pianificato }: {
   label: string;
   meseLabel: string;
-  delta: { delta: number; pct: number } | null;
+  delta: { delta: number; pct: number | null } | null;
   reale: number | null;
   pianificato: number | null;
 }) {
@@ -762,7 +765,7 @@ function KpiCard({ label, meseLabel, delta, reale, pianificato }: {
         <p className="text-sm text-muted-foreground">Piano: {fmt2(pianificato)}</p>
         {delta && (
           <p className={`text-sm font-medium ${delta.delta >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {delta.delta >= 0 ? "+" : ""}{fmt2(delta.delta)} ({delta.pct.toFixed(1)}%)
+            {delta.delta >= 0 ? "+" : ""}{fmt2(delta.delta)}{delta.pct != null ? ` (${delta.pct.toFixed(1)}%)` : ""}
           </p>
         )}
       </CardContent>
