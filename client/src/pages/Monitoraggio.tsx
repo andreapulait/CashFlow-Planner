@@ -28,7 +28,7 @@ import {
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, TrendingUp, Wallet, PiggyBank, ArrowDownCircle,
-  ChevronDown, ChevronRight, Landmark, ArrowRightLeft, CheckCircle2, Clock,
+  ChevronDown, ChevronRight, Landmark, ArrowRightLeft, Link2,
 } from "lucide-react";
 import { formatDate, monthOffsetToDate } from "@/lib/dateFormat";
 
@@ -42,6 +42,10 @@ type FormData = {
   data: string;
   fiumeId: number | undefined;
   descrizione: string;
+  // FK Approach A — collegamento esplicito alla voce del piano
+  fiumePianoId: number | undefined;
+  affluenteId: number | undefined;
+  reinvestimentoId: number | undefined;
 };
 
 const emptyForm = (): FormData => ({
@@ -50,6 +54,9 @@ const emptyForm = (): FormData => ({
   data: new Date().toISOString().slice(0, 10),
   fiumeId: undefined,
   descrizione: "",
+  fiumePianoId: undefined,
+  affluenteId: undefined,
+  reinvestimentoId: undefined,
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -93,11 +100,20 @@ interface EventoFormProps {
   form: FormData;
   setForm: (f: FormData) => void;
   fiumi: Array<{ id: number; nome: string }>;
+  linkLabel?: string | null;
 }
 
-function EventoForm({ form, setForm, fiumi }: EventoFormProps) {
+function EventoForm({ form, setForm, fiumi, linkLabel }: EventoFormProps) {
   return (
     <div className="space-y-4">
+      {/* Indicatore collegamento piano */}
+      {linkLabel && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 border">
+          <Link2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+          <span>{linkLabel}</span>
+        </div>
+      )}
+
       <div>
         <Label>Tipo</Label>
         <Select value={form.tipo} onValueChange={v => setForm({ ...form, tipo: v as TipoEvento })}>
@@ -166,6 +182,7 @@ export default function Monitoraggio() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm());
+  const [formLinkLabel, setFormLinkLabel] = useState<string | null>(null);
   const [graficoTipo, setGraficoTipo] = useState<"patrimonio" | "rendita" | "apporti">("patrimonio");
   const [pianoOpen, setPianoOpen] = useState<Record<string, boolean>>({
     fiumi: true,
@@ -177,10 +194,12 @@ export default function Monitoraggio() {
   const invalidate = () => {
     utils.monitoraggio.list.invalidate();
     utils.monitoraggio.confronto.invalidate();
+    utils.monitoraggio.confrontoPiano.invalidate();
   };
 
   const { data: eventi, isLoading: loadingEventi } = trpc.monitoraggio.list.useQuery();
   const { data: confronto, isLoading: loadingConfrontoData } = trpc.monitoraggio.confronto.useQuery();
+  const { data: confrontoPiano } = trpc.monitoraggio.confrontoPiano.useQuery();
   const { data: fiumi = [] } = trpc.fiumi.list.useQuery();
   const { data: allAffluenti = [] } = trpc.affluenti.listAll.useQuery();
   const { data: reinvestimentiData = [] } = trpc.reinvestimenti.list.useQuery();
@@ -204,12 +223,14 @@ export default function Monitoraggio() {
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm());
+    setFormLinkLabel(null);
     setDialogOpen(true);
   }
 
-  function openCreatePreFilled(prefill: Partial<FormData>) {
+  function openCreatePreFilled(prefill: Partial<FormData>, linkLabel?: string) {
     setEditingId(null);
     setForm({ ...emptyForm(), ...prefill });
+    setFormLinkLabel(linkLabel ?? null);
     setDialogOpen(true);
   }
 
@@ -221,7 +242,11 @@ export default function Monitoraggio() {
       data: new Date(e.data).toISOString().slice(0, 10),
       fiumeId: e.fiumeId ?? undefined,
       descrizione: e.descrizione ?? "",
+      fiumePianoId: e.fiumePianoId ?? undefined,
+      affluenteId: e.affluenteId ?? undefined,
+      reinvestimentoId: e.reinvestimentoId ?? undefined,
     });
+    setFormLinkLabel(null);
     setDialogOpen(true);
   }
 
@@ -229,6 +254,7 @@ export default function Monitoraggio() {
     setDialogOpen(false);
     setEditingId(null);
     setForm(emptyForm());
+    setFormLinkLabel(null);
   }
 
   function handleSubmit() {
@@ -243,6 +269,9 @@ export default function Monitoraggio() {
       data: new Date(form.data),
       fiumeId: form.fiumeId,
       descrizione: form.descrizione || undefined,
+      fiumePianoId: form.fiumePianoId,
+      affluenteId: form.affluenteId,
+      reinvestimentoId: form.reinvestimentoId,
     };
     if (editingId) updateMutation.mutate({ id: editingId, ...payload });
     else createMutation.mutate(payload);
@@ -286,27 +315,6 @@ export default function Monitoraggio() {
 
   const dataInizio = impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date("2026-01-01");
 
-  // Set "mese:fiumeId:tipo" per match su apporto/rendita/prelievo
-  const eventiRealiSet = new Set(
-    (eventi ?? []).map(e => {
-      const d = new Date(e.data);
-      const mese = (d.getFullYear() - dataInizio.getFullYear()) * 12 + (d.getMonth() - dataInizio.getMonth());
-      return `${mese}:${e.fiumeId ?? ""}:${e.tipo}`;
-    })
-  );
-  // Set "fiumeId:tipo" per i fiumi (costituzione unica — ignora la data)
-  const eventiRealiByFiumeTipo = new Set(
-    (eventi ?? []).map(e => `${e.fiumeId ?? ""}:${e.tipo}`)
-  );
-
-  const isRegistrato = (mese: number, fiumeId: number | null, tipo: TipoEvento) => {
-    // Fiumi: una sola costituzione → basta trovare un qualsiasi evento "capitale" per quel fiume
-    if (tipo === "capitale") return eventiRealiByFiumeTipo.has(`${fiumeId ?? ""}:capitale`);
-    // Affluenti / Reinvestimenti: match per mese + fiume
-    return eventiRealiSet.has(`${mese}:${fiumeId ?? ""}:${tipo}`);
-  };
-
-  // Fiumi: data di costituzione
   const fiumiPiano = [...fiumi]
     .map(f => {
       const data = f.dataCreazione ? new Date(f.dataCreazione) : monthOffsetToDate(dataInizio, f.meseCreazione);
@@ -315,7 +323,6 @@ export default function Monitoraggio() {
     })
     .sort((a, b) => a.dataCalcolata.getTime() - b.dataCalcolata.getTime());
 
-  // Affluenti: dati singoli e gruppi
   type AffItem = { id: number; fiumeId: number; fiumeNome: string; importo: number; dataCalcolata: Date; mese: number; descrizione: string | null; groupId: string | null; ricorrente: boolean };
   const affluentiPiano: AffItem[] = (allAffluenti as any[])
     .map((a: any) => {
@@ -325,7 +332,6 @@ export default function Monitoraggio() {
     })
     .sort((a: AffItem, b: AffItem) => a.dataCalcolata.getTime() - b.dataCalcolata.getTime());
 
-  // Reinvestimenti: puntuali con data
   type ReinvItem = { id: number; mese: number; dataCalcolata: Date; fiumeOrigineNome: string; fiumeOrigineId: number; fiumeDestinazioneNome: string | null; importoFisso: number | null; percentuale: number | null; descrizione: string | null };
   const reinvestimentiPiano: ReinvItem[] = (reinvestimentiData as any[])
     .map((r: any) => {
@@ -345,6 +351,39 @@ export default function Monitoraggio() {
       };
     })
     .sort((a: ReinvItem, b: ReinvItem) => a.dataCalcolata.getTime() - b.dataCalcolata.getTime());
+
+  // ─── Lookup Maps da confrontoPiano ────────────────────────────────────────
+
+  const cfmFiumi = new Map(
+    (confrontoPiano?.fiumi ?? []).map(x => [x.fiumePianoId, x])
+  );
+  const cfmAffluenti = new Map(
+    (confrontoPiano?.affluenti ?? []).map(x => [x.affluenteId, x])
+  );
+  const cfmReinvest = new Map(
+    (confrontoPiano?.reinvestimenti ?? []).map(x => [x.reinvestimentoId, x])
+  );
+
+  // ─── Aggregati per sezione ────────────────────────────────────────────────
+
+  const aggregatoFiumi = {
+    count: fiumiPiano.length,
+    pianificato: fiumiPiano.reduce((s, f) => s + f.sorgente, 0),
+    reale: fiumiPiano.reduce((s, f) => s + (cfmFiumi.get(f.id)?.totaleReale ?? 0), 0),
+    nEventi: fiumiPiano.reduce((s, f) => s + (cfmFiumi.get(f.id)?.nEventi ?? 0), 0),
+  };
+  const aggregatoAffluenti = {
+    count: affluentiPiano.length,
+    pianificato: affluentiPiano.reduce((s, a) => s + a.importo, 0),
+    reale: affluentiPiano.reduce((s, a) => s + (cfmAffluenti.get(a.id)?.totaleReale ?? 0), 0),
+    nEventi: affluentiPiano.reduce((s, a) => s + (cfmAffluenti.get(a.id)?.nEventi ?? 0), 0),
+  };
+  const aggregatoReinvest = {
+    count: reinvestimentiPiano.length,
+    pianificato: (confrontoPiano?.reinvestimenti ?? []).reduce((s, x) => s + x.pianificato, 0),
+    reale: (confrontoPiano?.reinvestimenti ?? []).reduce((s, x) => s + x.totaleReale, 0),
+    nEventi: (confrontoPiano?.reinvestimenti ?? []).reduce((s, x) => s + x.nEventi, 0),
+  };
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -417,26 +456,10 @@ export default function Monitoraggio() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="mese" tick={{ fontSize: 11 }} interval={Math.floor(graficoData.length / 10)} />
                     <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      formatter={(v: number) => fmt(v)}
-                      labelFormatter={l => l}
-                    />
+                    <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={l => l} />
                     <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="Pianificato"
-                      stroke="#6366f1"
-                      dot={false}
-                      strokeWidth={2}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="Reale"
-                      stroke="#10b981"
-                      dot={{ r: 3 }}
-                      strokeWidth={2}
-                      connectNulls={false}
-                    />
+                    <Line type="monotone" dataKey="Pianificato" stroke="#6366f1" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="Reale" stroke="#10b981" dot={{ r: 3 }} strokeWidth={2} connectNulls={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -576,7 +599,7 @@ export default function Monitoraggio() {
         <div>
           <h2 className="text-lg font-semibold">Piano Programmato</h2>
           <p className="text-sm text-muted-foreground">
-            Tutti gli eventi pianificati in ordine di data — clicca "Registra" per inserire il dato reale
+            Per ogni voce pianificata: importo previsto, totale registrato (N eventi) e scostamento
           </p>
         </div>
 
@@ -587,28 +610,26 @@ export default function Monitoraggio() {
           onOpenChange={v => setPianoOpen(p => ({ ...p, fiumi: v }))}
           icon={<Landmark className="h-4 w-4" />}
           title="Costituzione Fiumi"
-          count={fiumiPiano.length}
           color="text-purple-600"
+          aggregato={aggregatoFiumi}
         >
-          {fiumiPiano.map(f => {
-            const reg = isRegistrato(f.mese, f.id, "capitale");
-            return (
-              <PianoRow
-                key={f.id}
-                data={formatDate(f.dataCalcolata)}
-                label={f.nome}
-                sub={null}
-                importo={fmt(f.sorgente / 100)}
-                registrato={reg}
-                onRegistra={() => openCreatePreFilled({
-                  tipo: "capitale",
-                  fiumeId: f.id,
-                  importoEuro: (f.sorgente / 100).toString(),
-                  data: f.dataCalcolata.toISOString().slice(0, 10),
-                })}
-              />
-            );
-          })}
+          {fiumiPiano.map(f => (
+            <PianoRow
+              key={f.id}
+              data={formatDate(f.dataCalcolata)}
+              label={f.nome}
+              sub={null}
+              pianificato={f.sorgente}
+              confrontoData={cfmFiumi.get(f.id) ?? null}
+              onRegistra={() => openCreatePreFilled({
+                tipo: "capitale",
+                fiumeId: f.id,
+                fiumePianoId: f.id,
+                importoEuro: (f.sorgente / 100).toString(),
+                data: f.dataCalcolata.toISOString().slice(0, 10),
+              }, `Collegato a: Costituzione "${f.nome}" (${fmt(f.sorgente / 100)})`)}
+            />
+          ))}
         </PianoSection>
 
         {/* ── Affluenti ── */}
@@ -618,30 +639,28 @@ export default function Monitoraggio() {
           onOpenChange={v => setPianoOpen(p => ({ ...p, affluenti: v }))}
           icon={<Wallet className="h-4 w-4" />}
           title="Affluenti"
-          count={affluentiPiano.length}
           color="text-blue-600"
+          aggregato={aggregatoAffluenti}
         >
-          {affluentiPiano.map(a => {
-            const reg = isRegistrato(a.mese, a.fiumeId, "apporto");
-            return (
-              <PianoRow
-                key={a.id}
-                data={formatDate(a.dataCalcolata)}
-                label={a.fiumeNome}
-                sub={a.descrizione}
-                importo={fmt(a.importo / 100)}
-                registrato={reg}
-                badge={a.ricorrente ? "Ricorrente" : undefined}
-                onRegistra={() => openCreatePreFilled({
-                  tipo: "apporto",
-                  fiumeId: a.fiumeId,
-                  importoEuro: (a.importo / 100).toString(),
-                  data: a.dataCalcolata.toISOString().slice(0, 10),
-                  descrizione: a.descrizione ?? "",
-                })}
-              />
-            );
-          })}
+          {affluentiPiano.map(a => (
+            <PianoRow
+              key={a.id}
+              data={formatDate(a.dataCalcolata)}
+              label={a.fiumeNome}
+              sub={a.descrizione}
+              badge={a.ricorrente ? "Ricorrente" : undefined}
+              pianificato={a.importo}
+              confrontoData={cfmAffluenti.get(a.id) ?? null}
+              onRegistra={() => openCreatePreFilled({
+                tipo: "apporto",
+                fiumeId: a.fiumeId,
+                affluenteId: a.id,
+                importoEuro: (a.importo / 100).toString(),
+                data: a.dataCalcolata.toISOString().slice(0, 10),
+                descrizione: a.descrizione ?? "",
+              }, `Collegato a: Apporto "${a.fiumeNome}" (${fmt(a.importo / 100)})`)}
+            />
+          ))}
         </PianoSection>
 
         {/* ── Reinvestimenti ── */}
@@ -651,32 +670,35 @@ export default function Monitoraggio() {
           onOpenChange={v => setPianoOpen(p => ({ ...p, reinvestimenti: v }))}
           icon={<ArrowRightLeft className="h-4 w-4" />}
           title="Reinvestimenti"
-          count={reinvestimentiPiano.length}
           color="text-green-600"
+          aggregato={aggregatoReinvest}
         >
           {reinvestimentiPiano.map(r => {
-            const reg = isRegistrato(r.mese, r.fiumeOrigineId, "apporto");
+            const cfm = cfmReinvest.get(r.id) ?? null;
             const importoLabel = r.importoFisso != null
               ? fmt(r.importoFisso / 100)
               : r.percentuale != null
                 ? `${(r.percentuale / 100).toFixed(1)}%`
                 : "—";
             const dest = r.fiumeDestinazioneNome ? ` → ${r.fiumeDestinazioneNome}` : "";
+            const pianificato = cfm?.pianificato ?? (r.importoFisso ?? 0);
             return (
               <PianoRow
                 key={r.id}
                 data={formatDate(r.dataCalcolata)}
                 label={`${r.fiumeOrigineNome}${dest}`}
                 sub={r.descrizione}
-                importo={importoLabel}
-                registrato={reg}
+                pianificato={pianificato}
+                pianificatoLabel={r.percentuale != null && r.importoFisso == null ? importoLabel : undefined}
+                confrontoData={cfm}
                 onRegistra={() => openCreatePreFilled({
                   tipo: "apporto",
                   fiumeId: r.fiumeOrigineId,
-                  importoEuro: r.importoFisso != null ? (r.importoFisso / 100).toString() : "",
+                  reinvestimentoId: r.id,
+                  importoEuro: r.importoFisso != null ? (r.importoFisso / 100).toString() : (cfm ? (cfm.pianificato / 100).toString() : ""),
                   data: r.dataCalcolata.toISOString().slice(0, 10),
                   descrizione: r.descrizione ?? "",
-                })}
+                }, `Collegato a: Reinvestimento "${r.fiumeOrigineNome}${dest}" (${importoLabel})`)}
               />
             );
           })}
@@ -685,12 +707,14 @@ export default function Monitoraggio() {
 
       {/* Dialog crea/modifica */}
       <Dialog open={dialogOpen} onOpenChange={open => { if (!open) closeDialog(); }}>
-        <DialogContent>
+        <DialogContent className="flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingId ? "Modifica evento" : "Registra evento reale"}</DialogTitle>
           </DialogHeader>
-          <EventoForm form={form} setForm={setForm} fiumi={fiumi} />
-          <DialogFooter>
+          <div className="overflow-y-auto flex-1 px-1">
+            <EventoForm form={form} setForm={setForm} fiumi={fiumi} linkLabel={formLinkLabel} />
+          </div>
+          <DialogFooter className="pt-4 border-t mt-2">
             <Button variant="outline" onClick={closeDialog}>Annulla</Button>
             <Button
               onClick={handleSubmit}
@@ -738,40 +762,81 @@ function KpiCard({ label, mese, delta, reale, pianificato }: {
 
 // ─── Piano Section ────────────────────────────────────────────────────────────
 
-function PianoSection({ id, open, onOpenChange, icon, title, count, color, children }: {
+function PianoSection({ id: _id, open, onOpenChange, icon, title, color, children, aggregato }: {
   id: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   icon: React.ReactNode;
   title: string;
-  count: number;
   color: string;
   children: React.ReactNode;
+  aggregato: { count: number; pianificato: number; reale: number; nEventi: number };
 }) {
+  const fmtLocal = (v: number) =>
+    (v / 100).toLocaleString("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+
+  const delta = aggregato.reale - aggregato.pianificato;
+  const deltaPerc = aggregato.pianificato !== 0 ? (delta / aggregato.pianificato) * 100 : 0;
+  const hasEventi = aggregato.nEventi > 0;
+
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
       <Card>
         <CollapsibleTrigger asChild>
           <button
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors rounded-t-lg"
+            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors rounded-t-lg text-left"
           >
-            <div className="flex items-center gap-2">
-              <span className={color}>{icon}</span>
-              <span className="font-semibold text-sm">{title}</span>
-              <Badge variant="secondary" className="text-xs">{count}</Badge>
-            </div>
+            <span className={color}>{icon}</span>
+            <span className="font-semibold text-sm">{title}</span>
+            <Badge variant="secondary" className="text-xs">{aggregato.count}</Badge>
+
+            {/* Aggregato summary in header */}
+            {aggregato.count > 0 && aggregato.pianificato > 0 && (
+              <div className="ml-auto hidden sm:flex items-center gap-3 text-xs mr-2">
+                <span className="text-muted-foreground">
+                  Piano: <strong className="text-foreground">{fmtLocal(aggregato.pianificato)}</strong>
+                </span>
+                {hasEventi && (
+                  <>
+                    <span className="text-muted-foreground">
+                      Reale: <strong className="text-foreground">{fmtLocal(aggregato.reale)}</strong>
+                      <span className="ml-1">({aggregato.nEventi} ev.)</span>
+                    </span>
+                    <span className={`font-semibold ${delta >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {delta >= 0 ? "+" : ""}{fmtLocal(delta)} ({deltaPerc.toFixed(0)}%)
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+
             {open
-              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              ? <ChevronDown className={`h-4 w-4 text-muted-foreground ${aggregato.count > 0 && aggregato.pianificato > 0 ? "sm:ml-0" : "ml-auto"}`} />
+              : <ChevronRight className={`h-4 w-4 text-muted-foreground ${aggregato.count > 0 && aggregato.pianificato > 0 ? "sm:ml-0" : "ml-auto"}`} />
             }
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="border-t divide-y">
-            {count === 0 ? (
+            {aggregato.count === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nessun elemento</p>
             ) : children}
           </div>
+          {/* Footer aggregato — visibile su mobile (su desktop è nell'header) */}
+          {aggregato.count > 0 && hasEventi && aggregato.pianificato > 0 && (
+            <div className="sm:hidden border-t px-4 py-2 bg-muted/20 rounded-b-lg">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Totale</span>
+                <div className="flex items-center gap-3">
+                  <span>Piano: <strong>{fmtLocal(aggregato.pianificato)}</strong></span>
+                  <span>Reale: <strong>{fmtLocal(aggregato.reale)}</strong></span>
+                  <span className={`font-semibold ${delta >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {delta >= 0 ? "+" : ""}{fmtLocal(delta)} ({deltaPerc.toFixed(0)}%)
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </CollapsibleContent>
       </Card>
     </Collapsible>
@@ -780,32 +845,36 @@ function PianoSection({ id, open, onOpenChange, icon, title, count, color, child
 
 // ─── Piano Row ────────────────────────────────────────────────────────────────
 
-function PianoRow({ data, label, sub, importo, registrato, badge, onRegistra }: {
+function PianoRow({ data, label, sub, badge, pianificato, pianificatoLabel, confrontoData, onRegistra }: {
   data: string;
   label: string;
   sub: string | null;
-  importo: string;
-  registrato: boolean;
   badge?: string;
+  pianificato: number; // centesimi
+  pianificatoLabel?: string; // sovrascrive il display (es. "20.0%" per i reinvestimenti in %)
+  confrontoData: { nEventi: number; totaleReale: number } | null;
   onRegistra: () => void;
 }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20">
-      {/* Stato */}
-      <div className="shrink-0 w-5">
-        {registrato
-          ? <CheckCircle2 className="h-4 w-4 text-green-500" />
-          : <Clock className="h-4 w-4 text-muted-foreground/50" />
-        }
-      </div>
+  const nEventi = confrontoData?.nEventi ?? 0;
+  const totaleReale = confrontoData?.totaleReale ?? 0;
+  const delta = totaleReale - pianificato;
+  const deltaPerc = pianificato !== 0 ? (delta / pianificato) * 100 : 0;
+  const hasEventi = nEventi > 0;
 
+  const fmtCents = (v: number) =>
+    (v / 100).toLocaleString("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+
+  const pianificatoDisplay = pianificatoLabel ?? fmtCents(pianificato);
+
+  return (
+    <div className="flex items-start gap-2 sm:gap-3 px-4 py-3 hover:bg-muted/20">
       {/* Data */}
-      <span className="text-sm text-muted-foreground w-28 shrink-0">{data}</span>
+      <span className="text-xs text-muted-foreground w-24 shrink-0 pt-0.5">{data}</span>
 
       {/* Label + sub */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium truncate">{label}</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm font-medium">{label}</span>
           {badge && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{badge}</span>
           )}
@@ -813,16 +882,36 @@ function PianoRow({ data, label, sub, importo, registrato, badge, onRegistra }: 
         {sub && <p className="text-xs text-muted-foreground truncate">{sub}</p>}
       </div>
 
-      {/* Importo */}
-      <span className="text-sm font-medium w-24 text-right shrink-0">{importo}</span>
+      {/* Confronto colonna */}
+      <div className="text-right text-xs shrink-0 space-y-0.5 min-w-[140px]">
+        <div className="text-muted-foreground">
+          Piano: <span className="font-medium text-foreground">{pianificatoDisplay}</span>
+        </div>
+        {hasEventi ? (
+          <>
+            <div className="text-muted-foreground">
+              Reale: <span className="font-medium text-foreground">{fmtCents(totaleReale)}</span>
+              <span className="ml-1">({nEventi} ev.)</span>
+            </div>
+            <div className={`font-semibold ${delta >= 0 ? "text-green-600" : "text-red-600"}`}>
+              {delta >= 0 ? "+" : ""}{fmtCents(delta)} ({deltaPerc.toFixed(0)}%)
+            </div>
+          </>
+        ) : (
+          <div className="text-muted-foreground/60 italic">non ancora registrato</div>
+        )}
+      </div>
 
-      {/* Azione */}
-      {!registrato && (
-        <Button variant="outline" size="sm" className="shrink-0 h-7 text-xs" onClick={onRegistra}>
-          Registra
-        </Button>
-      )}
-      {registrato && <div className="w-[72px] shrink-0" />}
+      {/* Bottone Registra — SEMPRE attivo */}
+      <Button
+        variant={hasEventi ? "ghost" : "outline"}
+        size="sm"
+        className="shrink-0 h-7 text-xs"
+        onClick={onRegistra}
+      >
+        <Plus className="h-3 w-3 mr-1" />
+        Registra
+      </Button>
     </div>
   );
 }

@@ -227,6 +227,10 @@ export const eventiReali = pgTable("eventiReali", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   fiumeId: integer("fiumeId").references(() => fiumi.id, { onDelete: "set null" }),
+  /** FK espliciti Approach A: collegamento evento reale → voce del piano */
+  fiumePianoId: integer("fiumePianoId").references(() => fiumi.id, { onDelete: "set null" }),
+  affluenteId: integer("affluenteId").references(() => affluenti.id, { onDelete: "set null" }),
+  reinvestimentoId: integer("reinvestimentoId").references(() => reinvestimenti.id, { onDelete: "set null" }),
   /** 'apporto' | 'rendita' | 'capitale' | 'prelievo' */
   tipo: varchar("tipo", { length: 20 }).notNull(),
   /** Importo in centesimi */

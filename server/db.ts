@@ -1431,6 +1431,9 @@ export async function getEventiRealiByUserId(userId: number) {
 export async function createEventoReale(params: {
   userId: number;
   fiumeId?: number | null;
+  fiumePianoId?: number | null;
+  affluenteId?: number | null;
+  reinvestimentoId?: number | null;
   tipo: string;
   importo: number;
   data: Date;
@@ -1445,6 +1448,9 @@ export async function updateEventoReale(id: number, userId: number, params: {
   importo?: number;
   data?: Date;
   fiumeId?: number | null;
+  fiumePianoId?: number | null;
+  affluenteId?: number | null;
+  reinvestimentoId?: number | null;
   descrizione?: string | null;
 }) {
   const result = await db.update(eventiReali)

@@ -1710,6 +1710,9 @@ export const appRouter = router({
         data: z.coerce.date(),
         fiumeId: z.number().int().positive().optional(),
         descrizione: z.string().optional(),
+        fiumePianoId: z.number().int().positive().optional(),
+        affluenteId: z.number().int().positive().optional(),
+        reinvestimentoId: z.number().int().positive().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return db.createEventoReale({
@@ -1719,6 +1722,9 @@ export const appRouter = router({
           data: input.data,
           fiumeId: input.fiumeId ?? null,
           descrizione: input.descrizione ?? null,
+          fiumePianoId: input.fiumePianoId ?? null,
+          affluenteId: input.affluenteId ?? null,
+          reinvestimentoId: input.reinvestimentoId ?? null,
         });
       }),
 
@@ -1730,6 +1736,9 @@ export const appRouter = router({
         data: z.coerce.date().optional(),
         fiumeId: z.number().int().positive().nullable().optional(),
         descrizione: z.string().nullable().optional(),
+        fiumePianoId: z.number().int().positive().nullable().optional(),
+        affluenteId: z.number().int().positive().nullable().optional(),
+        reinvestimentoId: z.number().int().positive().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...data } = input;
@@ -1813,6 +1822,73 @@ export const appRouter = router({
       }
 
       return result;
+    }),
+
+    // ── confrontoPiano: per ogni voce del piano, quanti eventi e quanto totale ──
+    confrontoPiano: protectedProcedure.query(async ({ ctx }) => {
+      const eventi = await db.getEventiRealiByUserId(ctx.user.id);
+
+      const byFiumePiano = new Map<number, { nEventi: number; totaleReale: number }>();
+      const byAffluente  = new Map<number, { nEventi: number; totaleReale: number }>();
+      const byReinvest   = new Map<number, { nEventi: number; totaleReale: number }>();
+
+      for (const e of eventi) {
+        if (e.fiumePianoId) {
+          const c = byFiumePiano.get(e.fiumePianoId) ?? { nEventi: 0, totaleReale: 0 };
+          byFiumePiano.set(e.fiumePianoId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
+        }
+        if (e.affluenteId) {
+          const c = byAffluente.get(e.affluenteId) ?? { nEventi: 0, totaleReale: 0 };
+          byAffluente.set(e.affluenteId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
+        }
+        if (e.reinvestimentoId) {
+          const c = byReinvest.get(e.reinvestimentoId) ?? { nEventi: 0, totaleReale: 0 };
+          byReinvest.set(e.reinvestimentoId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
+        }
+      }
+
+      // Calcola importo pianificato per TUTTI i reinvestimenti
+      const reinvestimentiData = await db.getReinvestimentiByUserId(ctx.user.id);
+      const imp = await db.getImpostazioniByUserId(ctx.user.id);
+
+      const hasPct = reinvestimentiData.some(
+        r => r.reinvestimento.percentuale && !r.reinvestimento.importoFisso
+      );
+      let simStates: Map<number, Map<number, number>> | null = null;
+      if (hasPct) {
+        const sim = await runSimulazione(ctx.user.id, imp.orizzonteTemporale);
+        simStates = sim.fiumiStates;
+      }
+
+      const reinvPianificato = new Map<number, number>();
+      for (const rw of reinvestimentiData) {
+        const r = rw.reinvestimento;
+        if (r.importoFisso) {
+          reinvPianificato.set(r.id, r.importoFisso);
+        } else if (r.percentuale && simStates) {
+          // capSrc è in EUR (dalla simulazione) → convertiamo in centesimi
+          const capSrc = simStates.get(r.fiumeOrigineId)?.get(r.meseReinvestimento) ?? 0;
+          reinvPianificato.set(r.id, Math.round(capSrc * (r.percentuale / 10000) * 100));
+        } else {
+          reinvPianificato.set(r.id, 0);
+        }
+      }
+
+      return {
+        // Solo le voci con eventi (le planned amounts di fiumi/affluenti sono già nel frontend)
+        fiumi: Array.from(byFiumePiano.entries()).map(([fiumePianoId, d]) => ({ fiumePianoId, ...d })),
+        affluenti: Array.from(byAffluente.entries()).map(([affluenteId, d]) => ({ affluenteId, ...d })),
+        // Tutti i reinvestimenti (con o senza eventi) per il totale pianificato
+        reinvestimenti: reinvestimentiData.map(rw => {
+          const r = rw.reinvestimento;
+          const d = byReinvest.get(r.id) ?? { nEventi: 0, totaleReale: 0 };
+          return {
+            reinvestimentoId: r.id,
+            ...d,
+            pianificato: reinvPianificato.get(r.id) ?? 0,
+          };
+        }),
+      };
     }),
   }),
 
