@@ -20,10 +20,17 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, TrendingUp, Wallet, PiggyBank, ArrowDownCircle } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, TrendingUp, Wallet, PiggyBank, ArrowDownCircle,
+  ChevronDown, ChevronRight, Landmark, ArrowRightLeft, CheckCircle2, Clock,
+} from "lucide-react";
+import { formatDate, monthOffsetToDate } from "@/lib/dateFormat";
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
 
@@ -111,6 +118,7 @@ function EventoForm({ form, setForm, fiumi }: EventoFormProps) {
           placeholder="0.00"
           value={form.importoEuro}
           onChange={e => setForm({ ...form, importoEuro: e.target.value })}
+          autoComplete="off"
         />
       </div>
 
@@ -159,6 +167,11 @@ export default function Monitoraggio() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm());
   const [graficoTipo, setGraficoTipo] = useState<"patrimonio" | "rendita" | "apporti">("patrimonio");
+  const [pianoOpen, setPianoOpen] = useState<Record<string, boolean>>({
+    fiumi: true,
+    affluenti: true,
+    reinvestimenti: true,
+  });
 
   const utils = trpc.useUtils();
   const invalidate = () => {
@@ -169,6 +182,9 @@ export default function Monitoraggio() {
   const { data: eventi, isLoading: loadingEventi } = trpc.monitoraggio.list.useQuery();
   const { data: confronto, isLoading: loadingConfrontoData } = trpc.monitoraggio.confronto.useQuery();
   const { data: fiumi = [] } = trpc.fiumi.list.useQuery();
+  const { data: allAffluenti = [] } = trpc.affluenti.listAll.useQuery();
+  const { data: reinvestimentiData = [] } = trpc.reinvestimenti.list.useQuery();
+  const { data: impostazioni } = trpc.impostazioni.get.useQuery();
 
   const createMutation = trpc.monitoraggio.create.useMutation({
     onSuccess: () => { invalidate(); closeDialog(); toast.success("Evento registrato"); },
@@ -188,6 +204,12 @@ export default function Monitoraggio() {
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm());
+    setDialogOpen(true);
+  }
+
+  function openCreatePreFilled(prefill: Partial<FormData>) {
+    setEditingId(null);
+    setForm({ ...emptyForm(), ...prefill });
     setDialogOpen(true);
   }
 
@@ -259,6 +281,62 @@ export default function Monitoraggio() {
   const kpiRendita = ultimoMeseConDati
     ? fmtDelta(ultimoMeseConDati.renditaReale, ultimoMeseConDati.renditaPianificata)
     : null;
+
+  // ─── Piano programmato: calcolo date e sorting ────────────────────────────
+
+  const dataInizio = impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date("2026-01-01");
+
+  // Costruisce un Set di "mese:fiumeId:tipo" dagli eventi reali per il check visivo
+  const eventiRealiSet = new Set(
+    (eventi ?? []).map(e => {
+      const d = new Date(e.data);
+      const mese = (d.getFullYear() - dataInizio.getFullYear()) * 12 + (d.getMonth() - dataInizio.getMonth());
+      return `${mese}:${e.fiumeId ?? ""}:${e.tipo}`;
+    })
+  );
+
+  const isRegistrato = (mese: number, fiumeId: number | null, tipo: TipoEvento) =>
+    eventiRealiSet.has(`${mese}:${fiumeId ?? ""}:${tipo}`);
+
+  // Fiumi: data di costituzione
+  const fiumiPiano = [...fiumi]
+    .map(f => {
+      const data = f.dataCreazione ? new Date(f.dataCreazione) : monthOffsetToDate(dataInizio, f.meseCreazione);
+      const mese = (data.getFullYear() - dataInizio.getFullYear()) * 12 + (data.getMonth() - dataInizio.getMonth());
+      return { ...f, dataCalcolata: data, mese };
+    })
+    .sort((a, b) => a.dataCalcolata.getTime() - b.dataCalcolata.getTime());
+
+  // Affluenti: dati singoli e gruppi
+  type AffItem = { id: number; fiumeId: number; fiumeNome: string; importo: number; dataCalcolata: Date; mese: number; descrizione: string | null; groupId: string | null; ricorrente: boolean };
+  const affluentiPiano: AffItem[] = (allAffluenti as any[])
+    .map((a: any) => {
+      const data = a.dataAffluente ? new Date(a.dataAffluente) : monthOffsetToDate(dataInizio, a.mese);
+      const mese = (data.getFullYear() - dataInizio.getFullYear()) * 12 + (data.getMonth() - dataInizio.getMonth());
+      return { id: a.id, fiumeId: a.fiumeId, fiumeNome: a.fiumeNome, importo: a.importo, dataCalcolata: data, mese, descrizione: a.descrizione ?? null, groupId: a.groupId ?? null, ricorrente: a.ricorrente ?? false };
+    })
+    .sort((a: AffItem, b: AffItem) => a.dataCalcolata.getTime() - b.dataCalcolata.getTime());
+
+  // Reinvestimenti: puntuali con data
+  type ReinvItem = { id: number; mese: number; dataCalcolata: Date; fiumeOrigineNome: string; fiumeOrigineId: number; fiumeDestinazioneNome: string | null; importoFisso: number | null; percentuale: number | null; descrizione: string | null };
+  const reinvestimentiPiano: ReinvItem[] = (reinvestimentiData as any[])
+    .map((r: any) => {
+      const reinv = r.reinvestimento ?? r;
+      const data = reinv.dataReinvestimento ? new Date(reinv.dataReinvestimento) : monthOffsetToDate(dataInizio, reinv.meseReinvestimento);
+      const mese = (data.getFullYear() - dataInizio.getFullYear()) * 12 + (data.getMonth() - dataInizio.getMonth());
+      return {
+        id: reinv.id,
+        mese,
+        dataCalcolata: data,
+        fiumeOrigineNome: r.fiumeOrigineNome ?? "—",
+        fiumeOrigineId: reinv.fiumeOrigineId,
+        fiumeDestinazioneNome: r.fiumeDestinazioneNome ?? reinv.nuovoFiumeNome ?? null,
+        importoFisso: reinv.importoFisso ?? null,
+        percentuale: reinv.percentuale ?? null,
+        descrizione: reinv.descrizione ?? null,
+      };
+    })
+    .sort((a: ReinvItem, b: ReinvItem) => a.dataCalcolata.getTime() - b.dataCalcolata.getTime());
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -485,6 +563,118 @@ export default function Monitoraggio() {
         </TabsContent>
       </Tabs>
 
+      {/* ═══ Piano Programmato ═══════════════════════════════════════════════ */}
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Piano Programmato</h2>
+          <p className="text-sm text-muted-foreground">
+            Tutti gli eventi pianificati in ordine di data — clicca "Registra" per inserire il dato reale
+          </p>
+        </div>
+
+        {/* ── Costituzione Fiumi ── */}
+        <PianoSection
+          id="fiumi"
+          open={pianoOpen.fiumi}
+          onOpenChange={v => setPianoOpen(p => ({ ...p, fiumi: v }))}
+          icon={<Landmark className="h-4 w-4" />}
+          title="Costituzione Fiumi"
+          count={fiumiPiano.length}
+          color="text-purple-600"
+        >
+          {fiumiPiano.map(f => {
+            const reg = isRegistrato(f.mese, f.id, "capitale");
+            return (
+              <PianoRow
+                key={f.id}
+                data={formatDate(f.dataCalcolata)}
+                label={f.nome}
+                sub={null}
+                importo={fmt(f.sorgente / 100)}
+                registrato={reg}
+                onRegistra={() => openCreatePreFilled({
+                  tipo: "capitale",
+                  fiumeId: f.id,
+                  importoEuro: (f.sorgente / 100).toString(),
+                  data: f.dataCalcolata.toISOString().slice(0, 10),
+                })}
+              />
+            );
+          })}
+        </PianoSection>
+
+        {/* ── Affluenti ── */}
+        <PianoSection
+          id="affluenti"
+          open={pianoOpen.affluenti}
+          onOpenChange={v => setPianoOpen(p => ({ ...p, affluenti: v }))}
+          icon={<Wallet className="h-4 w-4" />}
+          title="Affluenti"
+          count={affluentiPiano.length}
+          color="text-blue-600"
+        >
+          {affluentiPiano.map(a => {
+            const reg = isRegistrato(a.mese, a.fiumeId, "apporto");
+            return (
+              <PianoRow
+                key={a.id}
+                data={formatDate(a.dataCalcolata)}
+                label={a.fiumeNome}
+                sub={a.descrizione}
+                importo={fmt(a.importo / 100)}
+                registrato={reg}
+                badge={a.ricorrente ? "Ricorrente" : undefined}
+                onRegistra={() => openCreatePreFilled({
+                  tipo: "apporto",
+                  fiumeId: a.fiumeId,
+                  importoEuro: (a.importo / 100).toString(),
+                  data: a.dataCalcolata.toISOString().slice(0, 10),
+                  descrizione: a.descrizione ?? "",
+                })}
+              />
+            );
+          })}
+        </PianoSection>
+
+        {/* ── Reinvestimenti ── */}
+        <PianoSection
+          id="reinvestimenti"
+          open={pianoOpen.reinvestimenti}
+          onOpenChange={v => setPianoOpen(p => ({ ...p, reinvestimenti: v }))}
+          icon={<ArrowRightLeft className="h-4 w-4" />}
+          title="Reinvestimenti"
+          count={reinvestimentiPiano.length}
+          color="text-green-600"
+        >
+          {reinvestimentiPiano.map(r => {
+            const reg = isRegistrato(r.mese, r.fiumeOrigineId, "apporto");
+            const importoLabel = r.importoFisso != null
+              ? fmt(r.importoFisso / 100)
+              : r.percentuale != null
+                ? `${(r.percentuale / 100).toFixed(1)}%`
+                : "—";
+            const dest = r.fiumeDestinazioneNome ? ` → ${r.fiumeDestinazioneNome}` : "";
+            return (
+              <PianoRow
+                key={r.id}
+                data={formatDate(r.dataCalcolata)}
+                label={`${r.fiumeOrigineNome}${dest}`}
+                sub={r.descrizione}
+                importo={importoLabel}
+                registrato={reg}
+                onRegistra={() => openCreatePreFilled({
+                  tipo: "apporto",
+                  fiumeId: r.fiumeOrigineId,
+                  importoEuro: r.importoFisso != null ? (r.importoFisso / 100).toString() : "",
+                  data: r.dataCalcolata.toISOString().slice(0, 10),
+                  descrizione: r.descrizione ?? "",
+                })}
+              />
+            );
+          })}
+        </PianoSection>
+      </div>
+
       {/* Dialog crea/modifica */}
       <Dialog open={dialogOpen} onOpenChange={open => { if (!open) closeDialog(); }}>
         <DialogContent>
@@ -507,7 +697,7 @@ export default function Monitoraggio() {
   );
 }
 
-// ─── KPI Card helper ──────────────────────────────────────────────────────────
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({ label, mese, delta, reale, pianificato }: {
   label: string;
@@ -535,5 +725,96 @@ function KpiCard({ label, mese, delta, reale, pianificato }: {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Piano Section ────────────────────────────────────────────────────────────
+
+function PianoSection({ id, open, onOpenChange, icon, title, count, color, children }: {
+  id: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  icon: React.ReactNode;
+  title: string;
+  count: number;
+  color: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors rounded-t-lg"
+          >
+            <div className="flex items-center gap-2">
+              <span className={color}>{icon}</span>
+              <span className="font-semibold text-sm">{title}</span>
+              <Badge variant="secondary" className="text-xs">{count}</Badge>
+            </div>
+            {open
+              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            }
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="border-t divide-y">
+            {count === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Nessun elemento</p>
+            ) : children}
+          </div>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
+// ─── Piano Row ────────────────────────────────────────────────────────────────
+
+function PianoRow({ data, label, sub, importo, registrato, badge, onRegistra }: {
+  data: string;
+  label: string;
+  sub: string | null;
+  importo: string;
+  registrato: boolean;
+  badge?: string;
+  onRegistra: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20">
+      {/* Stato */}
+      <div className="shrink-0 w-5">
+        {registrato
+          ? <CheckCircle2 className="h-4 w-4 text-green-500" />
+          : <Clock className="h-4 w-4 text-muted-foreground/50" />
+        }
+      </div>
+
+      {/* Data */}
+      <span className="text-sm text-muted-foreground w-28 shrink-0">{data}</span>
+
+      {/* Label + sub */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium truncate">{label}</span>
+          {badge && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{badge}</span>
+          )}
+        </div>
+        {sub && <p className="text-xs text-muted-foreground truncate">{sub}</p>}
+      </div>
+
+      {/* Importo */}
+      <span className="text-sm font-medium w-24 text-right shrink-0">{importo}</span>
+
+      {/* Azione */}
+      {!registrato && (
+        <Button variant="outline" size="sm" className="shrink-0 h-7 text-xs" onClick={onRegistra}>
+          Registra
+        </Button>
+      )}
+      {registrato && <div className="w-[72px] shrink-0" />}
+    </div>
   );
 }
