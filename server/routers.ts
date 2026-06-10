@@ -1758,16 +1758,24 @@ export const appRouter = router({
         await runSimulazione(ctx.user.id, imp.orizzonteTemporale);
 
       const eventi = await db.getEventiRealiByUserId(ctx.user.id);
-      const dataInizio = imp.dataInizio ? new Date(imp.dataInizio) : new Date('2026-01-01');
+
+      // ── Normalizzazione timezone ──────────────────────────────────────────────
+      // Le date vengono salvate come mezzanotte locale (es. Italia UTC+2 → 22:00 UTC giorno prima).
+      // Aggiungendo 12h prima di estrarre anno/mese in UTC recuperiamo il mese corretto
+      // per qualsiasi fuso orario entro ±12h.
+      const tzOffset = 12 * 3600000;
+      const rawDI = imp.dataInizio ? new Date(imp.dataInizio) : new Date('2026-01-01T00:00:00Z');
+      const diAdj = new Date(rawDI.getTime() + tzOffset);
+      const diYear = diAdj.getUTCFullYear();
+      const diMonth = diAdj.getUTCMonth();
+
+      const toMese = (date: Date) => {
+        const adj = new Date(date.getTime() + tzOffset);
+        return (adj.getUTCFullYear() - diYear) * 12 + (adj.getUTCMonth() - diMonth);
+      };
 
       // Calcola mese relativo per ogni evento reale
-      const eventiConMese = eventi.map(e => {
-        const d = new Date(e.data);
-        const mese =
-          (d.getFullYear() - dataInizio.getFullYear()) * 12 +
-          (d.getMonth() - dataInizio.getMonth());
-        return { ...e, mese };
-      });
+      const eventiConMese = eventi.map(e => ({ ...e, mese: toMese(new Date(e.data)) }));
 
       const eventiByMese = new Map<number, typeof eventiConMese>();
       for (const e of eventiConMese) {
@@ -1778,22 +1786,29 @@ export const appRouter = router({
       const lastEventMese = eventiConMese.length > 0
         ? Math.max(...eventiConMese.map(e => e.mese))
         : -1;
+      // Estendi anche indietro se ci sono eventi prima del piano (mese negativo)
+      const firstEventMese = eventiConMese.length > 0
+        ? Math.min(...eventiConMese.map(e => e.mese))
+        : 0;
+      const startMese = Math.min(0, firstEventMese);
       const maxMese = Math.max(imp.orizzonteTemporale, lastEventMese);
 
       const result = [];
-      for (let mese = 0; mese <= maxMese; mese++) {
-        // ── Pianificato ──
+      for (let mese = startMese; mese <= maxMese; mese++) {
+        // ── Pianificato (solo mesi ≥ 0, il piano non esiste prima di M0) ──
         let patrimonioPianificato = 0;
         let renditaPianificata = 0;
         let apportiPianificati = 0;
 
-        for (const [, stateMap] of Array.from(fiumiStates.entries()))
-          patrimonioPianificato += stateMap.get(mese) || 0;
-        for (const [, renditeMap] of Array.from(fiumiRendite.entries()))
-          renditaPianificata += renditeMap.get(mese) || 0;
-        for (const fiume of allFiumi) {
-          if (mese === fiume.meseCreazione) apportiPianificati += fiume.sorgente / 100;
-          apportiPianificati += affluentiByFiume.get(fiume.id)?.get(mese) || 0;
+        if (mese >= 0) {
+          for (const [, stateMap] of Array.from(fiumiStates.entries()))
+            patrimonioPianificato += stateMap.get(mese) || 0;
+          for (const [, renditeMap] of Array.from(fiumiRendite.entries()))
+            renditaPianificata += renditeMap.get(mese) || 0;
+          for (const fiume of allFiumi) {
+            if (mese === fiume.meseCreazione) apportiPianificati += fiume.sorgente / 100;
+            apportiPianificati += affluentiByFiume.get(fiume.id)?.get(mese) || 0;
+          }
         }
 
         // ── Reale ──
@@ -1811,11 +1826,11 @@ export const appRouter = router({
 
         result.push({
           mese,
-          patrimonioPianificato: Math.round(patrimonioPianificato * 100) / 100,
+          patrimonioPianificato: mese >= 0 ? Math.round(patrimonioPianificato * 100) / 100 : null,
           patrimonioReale,
-          renditaPianificata: Math.round(renditaPianificata * 100) / 100,
+          renditaPianificata: mese >= 0 ? Math.round(renditaPianificata * 100) / 100 : null,
           renditaReale,
-          apportiPianificati: Math.round(apportiPianificati * 100) / 100,
+          apportiPianificati: mese >= 0 ? Math.round(apportiPianificati * 100) / 100 : null,
           apportiReali,
           prelieviReali,
         });

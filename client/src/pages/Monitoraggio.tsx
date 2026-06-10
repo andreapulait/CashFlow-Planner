@@ -277,10 +277,20 @@ export default function Monitoraggio() {
     else createMutation.mutate(payload);
   }
 
+  // ─── Helper: mese offset → etichetta data reale ──────────────────────────
+
+  const meseToLabel = (mese: number) => {
+    // stessa normalizzazione timezone del backend (+12h)
+    const tzOffset = 12 * 3600000;
+    const di = new Date((impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date("2026-01-01")).getTime() + tzOffset);
+    const target = new Date(Date.UTC(di.getUTCFullYear(), di.getUTCMonth() + mese, 1));
+    return target.toLocaleDateString("it-IT", { month: "short", year: "numeric", timeZone: "UTC" });
+  };
+
   // ─── Dati grafico ─────────────────────────────────────────────────────────
 
   const graficoData = (confronto ?? []).map(row => {
-    const base = { mese: `M${row.mese}` };
+    const base = { mese: meseToLabel(row.mese) };
     if (graficoTipo === "patrimonio") return {
       ...base,
       Pianificato: row.patrimonioPianificato,
@@ -304,10 +314,10 @@ export default function Monitoraggio() {
     r.patrimonioReale != null || r.renditaReale != null || r.apportiReali != null
   );
 
-  const kpiPatrimonio = ultimoMeseConDati
+  const kpiPatrimonio = ultimoMeseConDati?.patrimonioPianificato != null
     ? fmtDelta(ultimoMeseConDati.patrimonioReale, ultimoMeseConDati.patrimonioPianificato)
     : null;
-  const kpiRendita = ultimoMeseConDati
+  const kpiRendita = ultimoMeseConDati?.renditaPianificata != null
     ? fmtDelta(ultimoMeseConDati.renditaReale, ultimoMeseConDati.renditaPianificata)
     : null;
 
@@ -405,14 +415,14 @@ export default function Monitoraggio() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <KpiCard
             label="Patrimonio vs piano"
-            mese={ultimoMeseConDati.mese}
+            meseLabel={meseToLabel(ultimoMeseConDati.mese)}
             delta={kpiPatrimonio}
             reale={ultimoMeseConDati.patrimonioReale}
             pianificato={ultimoMeseConDati.patrimonioPianificato}
           />
           <KpiCard
             label="Rendita vs piano"
-            mese={ultimoMeseConDati.mese}
+            meseLabel={meseToLabel(ultimoMeseConDati.mese)}
             delta={kpiRendita}
             reale={ultimoMeseConDati.renditaReale}
             pianificato={ultimoMeseConDati.renditaPianificata}
@@ -494,7 +504,7 @@ export default function Monitoraggio() {
                         const d = fmtDelta(row.patrimonioReale, row.patrimonioPianificato);
                         return (
                           <TableRow key={row.mese}>
-                            <TableCell className="font-mono text-sm">M{row.mese}</TableCell>
+                            <TableCell className="font-mono text-sm">{meseToLabel(row.mese)}</TableCell>
                             <TableCell className="text-right text-sm">{fmt(row.patrimonioPianificato)}</TableCell>
                             <TableCell className="text-right text-sm font-medium">{fmt(row.patrimonioReale)}</TableCell>
                             <TableCell className="text-right text-sm">
@@ -731,12 +741,12 @@ export default function Monitoraggio() {
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
-function KpiCard({ label, mese, delta, reale, pianificato }: {
+function KpiCard({ label, meseLabel, delta, reale, pianificato }: {
   label: string;
-  mese: number;
+  meseLabel: string;
   delta: { delta: number; pct: number } | null;
   reale: number | null;
-  pianificato: number;
+  pianificato: number | null;
 }) {
   const fmt2 = (v: number | null) =>
     v == null ? "—" : v.toLocaleString("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -745,7 +755,7 @@ function KpiCard({ label, mese, delta, reale, pianificato }: {
     <Card>
       <CardHeader className="pb-1">
         <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <p className="text-xs text-muted-foreground">ultimo dato: M{mese}</p>
+        <p className="text-xs text-muted-foreground">ultimo dato: {meseLabel}</p>
       </CardHeader>
       <CardContent>
         <p className="text-2xl font-bold">{fmt2(reale)}</p>
