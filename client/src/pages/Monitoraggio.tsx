@@ -286,7 +286,7 @@ export default function Monitoraggio() {
 
   const dataInizio = impostazioni?.dataInizio ? new Date(impostazioni.dataInizio) : new Date("2026-01-01");
 
-  // Costruisce un Set di "mese:fiumeId:tipo" dagli eventi reali per il check visivo
+  // Set "mese:fiumeId:tipo" per match su apporto/rendita/prelievo
   const eventiRealiSet = new Set(
     (eventi ?? []).map(e => {
       const d = new Date(e.data);
@@ -294,9 +294,17 @@ export default function Monitoraggio() {
       return `${mese}:${e.fiumeId ?? ""}:${e.tipo}`;
     })
   );
+  // Set "fiumeId:tipo" per i fiumi (costituzione unica — ignora la data)
+  const eventiRealiByFiumeTipo = new Set(
+    (eventi ?? []).map(e => `${e.fiumeId ?? ""}:${e.tipo}`)
+  );
 
-  const isRegistrato = (mese: number, fiumeId: number | null, tipo: TipoEvento) =>
-    eventiRealiSet.has(`${mese}:${fiumeId ?? ""}:${tipo}`);
+  const isRegistrato = (mese: number, fiumeId: number | null, tipo: TipoEvento) => {
+    // Fiumi: una sola costituzione → basta trovare un qualsiasi evento "capitale" per quel fiume
+    if (tipo === "capitale") return eventiRealiByFiumeTipo.has(`${fiumeId ?? ""}:capitale`);
+    // Affluenti / Reinvestimenti: match per mese + fiume
+    return eventiRealiSet.has(`${mese}:${fiumeId ?? ""}:${tipo}`);
+  };
 
   // Fiumi: data di costituzione
   const fiumiPiano = [...fiumi]
