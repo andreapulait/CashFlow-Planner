@@ -189,6 +189,23 @@ CREATE TABLE IF NOT EXISTS "eventiReali" (
 --   ADD COLUMN IF NOT EXISTS "affluenteId"      INTEGER REFERENCES "affluenti"("id") ON DELETE SET NULL,
 --   ADD COLUMN IF NOT EXISTS "reinvestimentoId" INTEGER REFERENCES "reinvestimenti"("id") ON DELETE SET NULL;
 
+-- ── Row-Level Security ───────────────────────────────────────────────────────
+-- Il backend usa connessione diretta PostgreSQL (service role) che bypassa RLS.
+-- RLS blocca solo l'API REST pubblica di Supabase (PostgREST / anon key).
+-- Nessuna policy aggiuntiva necessaria: senza policy, l'API pubblica non vede nulla.
+ALTER TABLE "users"                 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "passwordResetTokens"   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "fiumi"                 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "affluenti"             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "impostazioni"          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "reinvestimenti"        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "reinvestimentiPeriodici" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "notifiche"             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "alertConfig"           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "scenari"               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "scenarioSnapshots"     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "eventiReali"           ENABLE ROW LEVEL SECURITY;
+
 -- ── Indici utili ─────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS "idx_fiumi_userId"        ON "fiumi"("userId");
 CREATE INDEX IF NOT EXISTS "idx_affluenti_fiumeId"   ON "affluenti"("fiumeId");
