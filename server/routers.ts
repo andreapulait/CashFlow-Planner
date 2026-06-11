@@ -1866,14 +1866,22 @@ export const appRouter = router({
     confrontoPiano: protectedProcedure.query(async ({ ctx }) => {
       const eventi = await db.getEventiRealiByUserId(ctx.user.id);
 
-      const byFiumePiano = new Map<number, { nEventi: number; totaleReale: number }>();
-      const byAffluente  = new Map<number, { nEventi: number; totaleReale: number }>();
-      const byReinvest   = new Map<number, { nEventi: number; totaleReale: number }>();
+      // Per fiumi: snapshot logic (ultima 'capitale' per fiumePianoId - prelievi successivi).
+      // fiumePianoId e fiumeId coincidono per i prelievi: il prelievo è sul fiume, non sulla voce piano.
+      const capitaleByFiumePiano = new Map<number, Array<{ importo: number; data: Date }>>();
+      const prelieviByFiumeId    = new Map<number, Array<{ importo: number; data: Date }>>();
+      const byAffluente          = new Map<number, { nEventi: number; totaleReale: number }>();
+      const byReinvest           = new Map<number, { nEventi: number; totaleReale: number }>();
 
       for (const e of eventi) {
-        if (e.fiumePianoId) {
-          const c = byFiumePiano.get(e.fiumePianoId) ?? { nEventi: 0, totaleReale: 0 };
-          byFiumePiano.set(e.fiumePianoId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
+        const eData = new Date(e.data);
+        if (e.tipo === 'capitale' && e.fiumePianoId) {
+          if (!capitaleByFiumePiano.has(e.fiumePianoId)) capitaleByFiumePiano.set(e.fiumePianoId, []);
+          capitaleByFiumePiano.get(e.fiumePianoId)!.push({ importo: e.importo, data: eData });
+        }
+        if (e.tipo === 'prelievo' && e.fiumeId) {
+          if (!prelieviByFiumeId.has(e.fiumeId)) prelieviByFiumeId.set(e.fiumeId, []);
+          prelieviByFiumeId.get(e.fiumeId)!.push({ importo: e.importo, data: eData });
         }
         if (e.affluenteId) {
           const c = byAffluente.get(e.affluenteId) ?? { nEventi: 0, totaleReale: 0 };
@@ -1883,6 +1891,19 @@ export const appRouter = router({
           const c = byReinvest.get(e.reinvestimentoId) ?? { nEventi: 0, totaleReale: 0 };
           byReinvest.set(e.reinvestimentoId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
         }
+      }
+
+      // Calcola reale per ogni fiume: ultima snapshot capitale - prelievi successivi
+      const byFiumePiano = new Map<number, { nEventi: number; totaleReale: number }>();
+      for (const [fiumePianoId, capitaleEvts] of capitaleByFiumePiano.entries()) {
+        const lastEvt = capitaleEvts.reduce((a, b) => a.data.getTime() > b.data.getTime() ? a : b);
+        const prelieviPost = (prelieviByFiumeId.get(fiumePianoId) ?? [])
+          .filter(p => p.data.getTime() > lastEvt.data.getTime());
+        const totalePrelievi = prelieviPost.reduce((s, p) => s + p.importo, 0);
+        byFiumePiano.set(fiumePianoId, {
+          nEventi: capitaleEvts.length + prelieviPost.length,
+          totaleReale: lastEvt.importo - totalePrelievi,
+        });
       }
 
       // Calcola importo pianificato per TUTTI i reinvestimenti
