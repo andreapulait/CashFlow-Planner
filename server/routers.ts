@@ -1806,6 +1806,14 @@ export const appRouter = router({
         .filter(e => e.tipo === 'prelievo')
         .map(e => ({ importo: e.importo, mese: e.mese, fiumeId: e.fiumeId ?? null, data: new Date(e.data) }));
 
+      // Mese corrente (oggi) relativo all'inizio del piano — limite per la linea reale nel grafico
+      const currentMese = toMese(new Date());
+      // Primo mese in cui esiste almeno uno snapshot capitale
+      const allCapitaleEvts = [...capitaleEventsByFiume.values()].flat();
+      const firstCapitaleMese = allCapitaleEvts.length > 0
+        ? Math.min(...allCapitaleEvts.map(e => e.mese))
+        : Infinity;
+
       const result = [];
       for (let mese = startMese; mese <= maxMese; mese++) {
         // ── Pianificato (solo mesi ≥ 0, il piano non esiste prima di M0) ──
@@ -1827,11 +1835,11 @@ export const appRouter = router({
         // ── Reale ──
         const eventiMese = eventiByMese.get(mese) || [];
 
-        // Patrimonio: mostrato solo nei mesi con almeno un evento 'capitale' o 'prelievo'.
-        // Il valore = ultima snapshot per fiume fino a questo mese - prelievi successivi.
-        const hasCapitaleOPrelievo = eventiMese.some(e => e.tipo === 'capitale' || e.tipo === 'prelievo');
+        // Patrimonio reale: visibile per ogni mese dal primo snapshot fino ad oggi.
+        // Porta avanti l'ultimo valore noto (carry-forward) sottraendo i prelievi successivi.
+        // Mesi futuri (> oggi) e mesi prima del primo snapshot restano null.
         let patrimonioReale: number | null = null;
-        if (hasCapitaleOPrelievo) {
+        if (mese <= currentMese && mese >= firstCapitaleMese) {
           for (const [fiumeKey, capitaleEvts] of capitaleEventsByFiume.entries()) {
             const evtsUpToM = capitaleEvts.filter(e => e.mese <= mese);
             if (evtsUpToM.length === 0) continue;
