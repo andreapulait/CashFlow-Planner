@@ -1827,18 +1827,21 @@ export const appRouter = router({
         // ── Reale ──
         const eventiMese = eventiByMese.get(mese) || [];
 
-        // Patrimonio: per ogni fiumeId, ultima snapshot 'capitale' fino a questo mese
-        // meno tutti i 'prelievo' dello stesso fiume avvenuti dopo quella snapshot.
+        // Patrimonio: mostrato solo nei mesi con almeno un evento 'capitale' o 'prelievo'.
+        // Il valore = ultima snapshot per fiume fino a questo mese - prelievi successivi.
+        const hasCapitaleOPrelievo = eventiMese.some(e => e.tipo === 'capitale' || e.tipo === 'prelievo');
         let patrimonioReale: number | null = null;
-        for (const [fiumeKey, capitaleEvts] of capitaleEventsByFiume.entries()) {
-          const evtsUpToM = capitaleEvts.filter(e => e.mese <= mese);
-          if (evtsUpToM.length === 0) continue;
-          const lastEvt = evtsUpToM.reduce((a, b) => a.data.getTime() > b.data.getTime() ? a : b);
-          let val = lastEvt.importo / 100;
-          val -= prelieviConData
-            .filter(e => e.fiumeId === fiumeKey && e.data.getTime() > lastEvt.data.getTime() && e.mese <= mese)
-            .reduce((s, e) => s + e.importo / 100, 0);
-          patrimonioReale = (patrimonioReale ?? 0) + val;
+        if (hasCapitaleOPrelievo) {
+          for (const [fiumeKey, capitaleEvts] of capitaleEventsByFiume.entries()) {
+            const evtsUpToM = capitaleEvts.filter(e => e.mese <= mese);
+            if (evtsUpToM.length === 0) continue;
+            const lastEvt = evtsUpToM.reduce((a, b) => a.data.getTime() > b.data.getTime() ? a : b);
+            let val = lastEvt.importo / 100;
+            val -= prelieviConData
+              .filter(e => e.fiumeId === fiumeKey && e.data.getTime() > lastEvt.data.getTime() && e.mese <= mese)
+              .reduce((s, e) => s + e.importo / 100, 0);
+            patrimonioReale = (patrimonioReale ?? 0) + val;
+          }
         }
         const renditaReale = eventiMese.filter(e => e.tipo === 'rendita')
           .reduce((s, e) => s + e.importo, 0) / 100 || null;
