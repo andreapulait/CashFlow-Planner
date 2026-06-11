@@ -253,6 +253,16 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1, "Il nome non può essere vuoto").optional(),
+        telefono: z.string().max(30).optional().nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return db.updateUserProfile(ctx.user!.id, input);
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });

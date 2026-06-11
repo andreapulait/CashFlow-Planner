@@ -17,6 +17,7 @@ import Monitoraggio from "@/pages/Monitoraggio";
 import Calendario from "@/pages/Calendario";
 import Alert from "@/pages/Alert";
 import ResetPassword from "@/pages/ResetPassword";
+import Guida from "@/pages/Guida";
 import Navigation from "./components/Navigation";
 
 function Router() {
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/calendario" component={Calendario} />
       <Route path="/alert" component={Alert} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/guida" component={Guida} />
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>

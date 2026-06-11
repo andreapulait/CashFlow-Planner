@@ -1392,6 +1392,17 @@ export async function updateUserPassword(id: number, passwordHash: string) {
     .where(eq(users.id, id));
 }
 
+export async function updateUserProfile(id: number, params: {
+  name?: string;
+  telefono?: string | null;
+}) {
+  const result = await db.update(users)
+    .set({ ...params, updatedAt: new Date() })
+    .where(eq(users.id, id))
+    .returning();
+  return result[0];
+}
+
 export async function createPasswordResetToken(params: {
   userId: number;
   token: string;

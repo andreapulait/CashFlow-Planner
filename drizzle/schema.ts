@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   authProvider: varchar("authProvider", { length: 20 }).notNull().default("email"),
   oauthProviderId: varchar("oauthProviderId", { length: 255 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
+  telefono: varchar("telefono", { length: 30 }),
   role: roleEnum("role").default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),

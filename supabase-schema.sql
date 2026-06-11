@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   "authProvider"     VARCHAR(20)  NOT NULL DEFAULT 'email',
   "oauthProviderId"  VARCHAR(255),
   "loginMethod"      VARCHAR(64),
+  "telefono"         VARCHAR(30),
   "role"             "role"       NOT NULL DEFAULT 'user',
   "createdAt"        TIMESTAMP    NOT NULL DEFAULT NOW(),
   "updatedAt"        TIMESTAMP    NOT NULL DEFAULT NOW(),
@@ -153,6 +154,7 @@ CREATE TABLE IF NOT EXISTS "alertConfig" (
   "updatedAt"        TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 ALTER TABLE "alertConfig" ADD COLUMN IF NOT EXISTS "triggered" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "telefono" VARCHAR(30);
 ALTER TABLE "scenarioSnapshots" ADD COLUMN IF NOT EXISTS "reinvestimentiPeriodicaData" TEXT;
 
 -- ── Password Reset Tokens ────────────────────────────────────────────────────

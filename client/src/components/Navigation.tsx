@@ -7,6 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProfileDialog } from "@/components/ProfileDialog";
 import {
   Sheet,
   SheetContent,
@@ -34,6 +35,8 @@ import {
   Menu,
   BellRing,
   Activity,
+  User,
+  BookOpen,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -63,6 +66,7 @@ export default function Navigation() {
   const { user, isAuthenticated, loading } = useAuth();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => { window.location.href = "/"; },
@@ -182,20 +186,37 @@ export default function Navigation() {
             <div className="flex items-center gap-2 shrink-0">
               <NotificationCenter />
 
-              {/* Utente + logout — solo desktop */}
-              <span className="hidden lg:inline text-sm text-muted-foreground">
-                {user?.name || user?.email}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                disabled={logoutMutation.isPending}
-                className="hidden lg:flex"
-              >
-                <LogOut className="mr-1.5 h-4 w-4" />
-                Logout
-              </Button>
+              {/* Utente dropdown — solo desktop */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="hidden lg:flex gap-1.5">
+                    <User className="h-4 w-4" />
+                    {user?.name || user?.email}
+                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setShowProfile(true)}>
+                    <User className="mr-2 h-4 w-4" />
+                    Dati personali
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/guida" className="flex items-center cursor-pointer w-full">
+                      <BookOpen className="mr-2 h-4 w-4" />
+                      Guida
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    disabled={logoutMutation.isPending}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Hamburger — solo mobile */}
               <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -236,6 +257,18 @@ export default function Navigation() {
                     </p>
                     <NavLink href="/impostazioni" icon={Settings} label="Impostazioni" onClick={() => setMobileOpen(false)} />
 
+                    <p className="px-3 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Account
+                    </p>
+                    <div
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm cursor-pointer transition-colors hover:bg-accent text-foreground"
+                      onClick={() => { setMobileOpen(false); setShowProfile(true); }}
+                    >
+                      <User className="h-4 w-4 shrink-0" />
+                      Dati personali
+                    </div>
+                    <NavLink href="/guida" icon={BookOpen} label="Guida" onClick={() => setMobileOpen(false)} />
+
                     <div className="pt-4 border-t mt-2">
                       <Button
                         variant="outline"
@@ -265,6 +298,8 @@ export default function Navigation() {
           </div>
         )}
       </div>
+
+      <ProfileDialog open={showProfile} onOpenChange={setShowProfile} />
     </nav>
   );
 }
