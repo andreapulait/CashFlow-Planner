@@ -1793,6 +1793,19 @@ export const appRouter = router({
       const startMese = Math.min(0, firstEventMese);
       const maxMese = Math.max(imp.orizzonteTemporale, lastEventMese);
 
+      // ── Pre-loop: snapshot capitale per fiumeId per calcolo patrimonio reale ──
+      // Raggruppa eventi 'capitale' per fiumeId (null = evento senza fiume associato).
+      // Per ogni mese usiamo l'ultima snapshot per fiume e sottraiamo i prelievi successivi.
+      const capitaleEventsByFiume = new Map<number | null, Array<{ importo: number; mese: number; data: Date }>>();
+      for (const e of eventiConMese.filter(e => e.tipo === 'capitale')) {
+        const key = e.fiumeId ?? null;
+        if (!capitaleEventsByFiume.has(key)) capitaleEventsByFiume.set(key, []);
+        capitaleEventsByFiume.get(key)!.push({ importo: e.importo, mese: e.mese, data: new Date(e.data) });
+      }
+      const prelieviConData = eventiConMese
+        .filter(e => e.tipo === 'prelievo')
+        .map(e => ({ importo: e.importo, mese: e.mese, fiumeId: e.fiumeId ?? null, data: new Date(e.data) }));
+
       const result = [];
       for (let mese = startMese; mese <= maxMese; mese++) {
         // ── Pianificato (solo mesi ≥ 0, il piano non esiste prima di M0) ──
@@ -1813,12 +1826,20 @@ export const appRouter = router({
 
         // ── Reale ──
         const eventiMese = eventiByMese.get(mese) || [];
-        const capitaleEvts = eventiMese.filter(e => e.tipo === 'capitale');
-        // Somma gli importi: ogni evento "capitale" rappresenta il valore di UN fiume,
-        // la somma di tutti dà il patrimonio totale reale del mese.
-        const patrimonioReale = capitaleEvts.length > 0
-          ? capitaleEvts.reduce((s, e) => s + e.importo, 0) / 100
-          : null;
+
+        // Patrimonio: per ogni fiumeId, ultima snapshot 'capitale' fino a questo mese
+        // meno tutti i 'prelievo' dello stesso fiume avvenuti dopo quella snapshot.
+        let patrimonioReale: number | null = null;
+        for (const [fiumeKey, capitaleEvts] of capitaleEventsByFiume.entries()) {
+          const evtsUpToM = capitaleEvts.filter(e => e.mese <= mese);
+          if (evtsUpToM.length === 0) continue;
+          const lastEvt = evtsUpToM.reduce((a, b) => a.data.getTime() > b.data.getTime() ? a : b);
+          let val = lastEvt.importo / 100;
+          val -= prelieviConData
+            .filter(e => e.fiumeId === fiumeKey && e.data.getTime() > lastEvt.data.getTime() && e.mese <= mese)
+            .reduce((s, e) => s + e.importo / 100, 0);
+          patrimonioReale = (patrimonioReale ?? 0) + val;
+        }
         const renditaReale = eventiMese.filter(e => e.tipo === 'rendita')
           .reduce((s, e) => s + e.importo, 0) / 100 || null;
         const apportiReali = eventiMese.filter(e => e.tipo === 'apporto')
