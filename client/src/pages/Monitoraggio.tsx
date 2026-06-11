@@ -34,15 +34,16 @@ import { formatDate, monthOffsetToDate } from "@/lib/dateFormat";
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
 
-type TipoEvento = "apporto" | "rendita" | "capitale" | "prelievo";
+type TipoEvento = "apporto" | "rendita" | "capitale" | "prelievo" | "reinvestimento";
 
 type FormData = {
   tipo: TipoEvento;
   importoEuro: string;
+  quotaNonReinvestitaEuro: string;
   data: string;
   fiumeId: number | undefined;
+  fiumeDestinazioneId: number | undefined;
   descrizione: string;
-  // FK Approach A — collegamento esplicito alla voce del piano
   fiumePianoId: number | undefined;
   affluenteId: number | undefined;
   reinvestimentoId: number | undefined;
@@ -51,8 +52,10 @@ type FormData = {
 const emptyForm = (): FormData => ({
   tipo: "capitale",
   importoEuro: "",
+  quotaNonReinvestitaEuro: "",
   data: new Date().toISOString().slice(0, 10),
   fiumeId: undefined,
+  fiumeDestinazioneId: undefined,
   descrizione: "",
   fiumePianoId: undefined,
   affluenteId: undefined,
@@ -62,24 +65,27 @@ const emptyForm = (): FormData => ({
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const TIPO_LABELS: Record<TipoEvento, string> = {
-  apporto:  "Apporto",
-  rendita:  "Rendita",
-  capitale: "Valore capitale",
-  prelievo: "Prelievo",
+  capitale:      "Valore capitale",
+  rendita:       "Rendita",
+  apporto:       "Apporto",
+  reinvestimento:"Reinvestimento",
+  prelievo:      "Prelievo",
 };
 
 const TIPO_COLORS: Record<TipoEvento, string> = {
-  apporto:  "bg-blue-100 text-blue-800",
-  rendita:  "bg-green-100 text-green-800",
-  capitale: "bg-purple-100 text-purple-800",
-  prelievo: "bg-red-100 text-red-800",
+  capitale:      "bg-purple-100 text-purple-800",
+  rendita:       "bg-green-100 text-green-800",
+  apporto:       "bg-blue-100 text-blue-800",
+  reinvestimento:"bg-orange-100 text-orange-800",
+  prelievo:      "bg-red-100 text-red-800",
 };
 
 const TIPO_ICONS: Record<TipoEvento, React.ReactNode> = {
-  apporto:  <Wallet className="h-4 w-4" />,
-  rendita:  <TrendingUp className="h-4 w-4" />,
-  capitale: <PiggyBank className="h-4 w-4" />,
-  prelievo: <ArrowDownCircle className="h-4 w-4" />,
+  capitale:      <PiggyBank className="h-4 w-4" />,
+  rendita:       <TrendingUp className="h-4 w-4" />,
+  apporto:       <Wallet className="h-4 w-4" />,
+  reinvestimento:<ArrowRightLeft className="h-4 w-4" />,
+  prelievo:      <ArrowDownCircle className="h-4 w-4" />,
 };
 
 const fmt = (v: number | null) =>
@@ -104,9 +110,11 @@ interface EventoFormProps {
 }
 
 function EventoForm({ form, setForm, fiumi, linkLabel }: EventoFormProps) {
+  const isReinvestimento = form.tipo === "reinvestimento";
+  const isRendita = form.tipo === "rendita";
+
   return (
     <div className="space-y-4">
-      {/* Indicatore collegamento piano */}
       {linkLabel && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 border">
           <Link2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
@@ -126,8 +134,43 @@ function EventoForm({ form, setForm, fiumi, linkLabel }: EventoFormProps) {
         </Select>
       </div>
 
+      {/* Fiume sorgente (per tutti) o solo sorgente per reinvestimento */}
       <div>
-        <Label>Importo (€)</Label>
+        <Label>{isReinvestimento ? "Fiume sorgente" : "Fiume"}{!isReinvestimento && " (opzionale)"}</Label>
+        <Select
+          value={form.fiumeId?.toString() ?? "none"}
+          onValueChange={v => setForm({ ...form, fiumeId: v === "none" ? undefined : Number(v) })}
+        >
+          <SelectTrigger><SelectValue placeholder={isReinvestimento ? "Seleziona fiume sorgente" : "Tutti i fiumi"} /></SelectTrigger>
+          <SelectContent>
+            {!isReinvestimento && <SelectItem value="none">— nessuno</SelectItem>}
+            {fiumi.map(f => (
+              <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Fiume destinazione (solo reinvestimento) */}
+      {isReinvestimento && (
+        <div>
+          <Label>Fiume destinazione</Label>
+          <Select
+            value={form.fiumeDestinazioneId?.toString() ?? "none"}
+            onValueChange={v => setForm({ ...form, fiumeDestinazioneId: v === "none" ? undefined : Number(v) })}
+          >
+            <SelectTrigger><SelectValue placeholder="Seleziona fiume destinazione" /></SelectTrigger>
+            <SelectContent>
+              {fiumi.map(f => (
+                <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div>
+        <Label>{isRendita ? "Rendita totale generata (€)" : "Importo (€)"}</Label>
         <Input
           type="number"
           step="0.01"
@@ -138,6 +181,21 @@ function EventoForm({ form, setForm, fiumi, linkLabel }: EventoFormProps) {
         />
       </div>
 
+      {/* Quota non reinvestita (solo rendita) */}
+      {isRendita && (
+        <div>
+          <Label>Quota non reinvestita (€) <span className="text-muted-foreground text-xs">— esce dal sistema</span></Label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            value={form.quotaNonReinvestitaEuro}
+            onChange={e => setForm({ ...form, quotaNonReinvestitaEuro: e.target.value })}
+            autoComplete="off"
+          />
+        </div>
+      )}
+
       <div>
         <Label>Data</Label>
         <Input
@@ -145,22 +203,6 @@ function EventoForm({ form, setForm, fiumi, linkLabel }: EventoFormProps) {
           value={form.data}
           onChange={e => setForm({ ...form, data: e.target.value })}
         />
-      </div>
-
-      <div>
-        <Label>Fiume (opzionale)</Label>
-        <Select
-          value={form.fiumeId?.toString() ?? "none"}
-          onValueChange={v => setForm({ ...form, fiumeId: v === "none" ? undefined : Number(v) })}
-        >
-          <SelectTrigger><SelectValue placeholder="Tutti i fiumi" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Tutti i fiumi</SelectItem>
-            {fiumi.map(f => (
-              <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       <div>
@@ -239,8 +281,10 @@ export default function Monitoraggio() {
     setForm({
       tipo: e.tipo as TipoEvento,
       importoEuro: (e.importo / 100).toString(),
+      quotaNonReinvestitaEuro: e.quotaNonReinvestita ? (e.quotaNonReinvestita / 100).toString() : "",
       data: new Date(e.data).toISOString().slice(0, 10),
       fiumeId: e.fiumeId ?? undefined,
+      fiumeDestinazioneId: e.fiumeDestinazioneId ?? undefined,
       descrizione: e.descrizione ?? "",
       fiumePianoId: e.fiumePianoId ?? undefined,
       affluenteId: e.affluenteId ?? undefined,
@@ -263,11 +307,24 @@ export default function Monitoraggio() {
       toast.error("Inserisci un importo valido");
       return;
     }
+    if (form.tipo === "reinvestimento" && !form.fiumeId) {
+      toast.error("Seleziona il fiume sorgente");
+      return;
+    }
+    if (form.tipo === "reinvestimento" && !form.fiumeDestinazioneId) {
+      toast.error("Seleziona il fiume destinazione");
+      return;
+    }
+    const quotaNonReinvestita = form.tipo === "rendita" && form.quotaNonReinvestitaEuro
+      ? Math.round(parseFloat(form.quotaNonReinvestitaEuro) * 100)
+      : undefined;
     const payload = {
       tipo: form.tipo,
       importo,
+      quotaNonReinvestita,
       data: new Date(form.data),
       fiumeId: form.fiumeId,
+      fiumeDestinazioneId: form.fiumeDestinazioneId,
       descrizione: form.descrizione || undefined,
       fiumePianoId: form.fiumePianoId,
       affluenteId: form.affluenteId,
@@ -705,8 +762,9 @@ export default function Monitoraggio() {
                 pianificatoLabel={r.percentuale != null && r.importoFisso == null ? importoLabel : undefined}
                 confrontoData={cfm}
                 onRegistra={() => openCreatePreFilled({
-                  tipo: "apporto",
+                  tipo: "reinvestimento",
                   fiumeId: r.fiumeOrigineId,
+                  fiumeDestinazioneId: r.fiumeDestinazioneId ?? undefined,
                   reinvestimentoId: r.id,
                   importoEuro: r.importoFisso != null ? (r.importoFisso / 100).toString() : (cfm ? (cfm.pianificato / 100).toString() : ""),
                   data: r.dataCalcolata.toISOString().slice(0, 10),

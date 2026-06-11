@@ -1705,10 +1705,12 @@ export const appRouter = router({
 
     create: protectedProcedure
       .input(z.object({
-        tipo: z.enum(['apporto', 'rendita', 'capitale', 'prelievo']),
+        tipo: z.enum(['apporto', 'rendita', 'capitale', 'prelievo', 'reinvestimento']),
         importo: z.number().int().positive(),
+        quotaNonReinvestita: z.number().int().nonnegative().optional(),
         data: z.coerce.date(),
         fiumeId: z.number().int().positive().optional(),
+        fiumeDestinazioneId: z.number().int().positive().optional(),
         descrizione: z.string().optional(),
         fiumePianoId: z.number().int().positive().optional(),
         affluenteId: z.number().int().positive().optional(),
@@ -1719,8 +1721,10 @@ export const appRouter = router({
           userId: ctx.user.id,
           tipo: input.tipo,
           importo: input.importo,
+          quotaNonReinvestita: input.quotaNonReinvestita ?? null,
           data: input.data,
           fiumeId: input.fiumeId ?? null,
+          fiumeDestinazioneId: input.fiumeDestinazioneId ?? null,
           descrizione: input.descrizione ?? null,
           fiumePianoId: input.fiumePianoId ?? null,
           affluenteId: input.affluenteId ?? null,
@@ -1731,10 +1735,12 @@ export const appRouter = router({
     update: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
-        tipo: z.enum(['apporto', 'rendita', 'capitale', 'prelievo']).optional(),
+        tipo: z.enum(['apporto', 'rendita', 'capitale', 'prelievo', 'reinvestimento']).optional(),
         importo: z.number().int().positive().optional(),
+        quotaNonReinvestita: z.number().int().nonnegative().nullable().optional(),
         data: z.coerce.date().optional(),
         fiumeId: z.number().int().positive().nullable().optional(),
+        fiumeDestinazioneId: z.number().int().positive().nullable().optional(),
         descrizione: z.string().nullable().optional(),
         fiumePianoId: z.number().int().positive().nullable().optional(),
         affluenteId: z.number().int().positive().nullable().optional(),
@@ -1793,18 +1799,37 @@ export const appRouter = router({
       const startMese = Math.min(0, firstEventMese);
       const maxMese = Math.max(imp.orizzonteTemporale, lastEventMese);
 
-      // ── Pre-loop: snapshot capitale per fiumeId per calcolo patrimonio reale ──
-      // Raggruppa eventi 'capitale' per fiumeId (null = evento senza fiume associato).
-      // Per ogni mese usiamo l'ultima snapshot per fiume e sottraiamo i prelievi successivi.
+      // ── Pre-loop: carry-forward per patrimonio reale ──────────────────────────
+      // snapshot 'capitale' per fiumeId (ancora di partenza)
       const capitaleEventsByFiume = new Map<number | null, Array<{ importo: number; mese: number; data: Date }>>();
-      for (const e of eventiConMese.filter(e => e.tipo === 'capitale')) {
-        const key = e.fiumeId ?? null;
-        if (!capitaleEventsByFiume.has(key)) capitaleEventsByFiume.set(key, []);
-        capitaleEventsByFiume.get(key)!.push({ importo: e.importo, mese: e.mese, data: new Date(e.data) });
+      // eventi non-capitale con delta signed per fiumeId
+      // rendita: +(importo - quotaNonReinvestita)  apporto: +importo
+      // prelievo: -importo  reinvestimento src: -importo  reinvestimento dst: +importo
+      type CarryEvt = { delta: number; mese: number; data: Date };
+      const carryByFiume = new Map<number | null, CarryEvt[]>();
+
+      const addCarry = (key: number | null, delta: number, mese: number, data: Date) => {
+        if (!carryByFiume.has(key)) carryByFiume.set(key, []);
+        carryByFiume.get(key)!.push({ delta, mese, data });
+      };
+
+      for (const e of eventiConMese) {
+        const eData = new Date(e.data);
+        const srcKey = e.fiumeId ?? null;
+        if (e.tipo === 'capitale') {
+          if (!capitaleEventsByFiume.has(srcKey)) capitaleEventsByFiume.set(srcKey, []);
+          capitaleEventsByFiume.get(srcKey)!.push({ importo: e.importo, mese: e.mese, data: eData });
+        } else if (e.tipo === 'rendita') {
+          addCarry(srcKey, e.importo - (e.quotaNonReinvestita ?? 0), e.mese, eData);
+        } else if (e.tipo === 'apporto') {
+          addCarry(srcKey, e.importo, e.mese, eData);
+        } else if (e.tipo === 'prelievo') {
+          addCarry(srcKey, -e.importo, e.mese, eData);
+        } else if (e.tipo === 'reinvestimento') {
+          addCarry(srcKey, -e.importo, e.mese, eData);
+          if (e.fiumeDestinazioneId) addCarry(e.fiumeDestinazioneId, e.importo, e.mese, eData);
+        }
       }
-      const prelieviConData = eventiConMese
-        .filter(e => e.tipo === 'prelievo')
-        .map(e => ({ importo: e.importo, mese: e.mese, fiumeId: e.fiumeId ?? null, data: new Date(e.data) }));
 
       // Mese corrente (oggi) relativo all'inizio del piano — limite per la linea reale nel grafico
       const currentMese = toMese(new Date());
@@ -1844,10 +1869,11 @@ export const appRouter = router({
             const evtsUpToM = capitaleEvts.filter(e => e.mese <= mese);
             if (evtsUpToM.length === 0) continue;
             const lastEvt = evtsUpToM.reduce((a, b) => a.data.getTime() > b.data.getTime() ? a : b);
+            const lastTime = lastEvt.data.getTime();
             let val = lastEvt.importo / 100;
-            val -= prelieviConData
-              .filter(e => e.fiumeId === fiumeKey && e.data.getTime() > lastEvt.data.getTime() && e.mese <= mese)
-              .reduce((s, e) => s + e.importo / 100, 0);
+            val += (carryByFiume.get(fiumeKey) ?? [])
+              .filter(e => e.data.getTime() > lastTime && e.mese <= mese)
+              .reduce((s, e) => s + e.delta / 100, 0);
             patrimonioReale = (patrimonioReale ?? 0) + val;
           }
         }
@@ -1877,12 +1903,17 @@ export const appRouter = router({
     confrontoPiano: protectedProcedure.query(async ({ ctx }) => {
       const eventi = await db.getEventiRealiByUserId(ctx.user.id);
 
-      // Per fiumi: snapshot logic (ultima 'capitale' per fiumePianoId - prelievi successivi).
-      // fiumePianoId e fiumeId coincidono per i prelievi: il prelievo è sul fiume, non sulla voce piano.
+      // Per fiumi: snapshot + carry-forward (stessa logica del confronto mensile).
       const capitaleByFiumePiano = new Map<number, Array<{ importo: number; data: Date }>>();
-      const prelieviByFiumeId    = new Map<number, Array<{ importo: number; data: Date }>>();
-      const byAffluente          = new Map<number, { nEventi: number; totaleReale: number }>();
-      const byReinvest           = new Map<number, { nEventi: number; totaleReale: number }>();
+      type PianoCarry = { delta: number; data: Date };
+      const carryByFiumePiano = new Map<number, PianoCarry[]>();
+      const byAffluente       = new Map<number, { nEventi: number; totaleReale: number }>();
+      const byReinvest        = new Map<number, { nEventi: number; totaleReale: number }>();
+
+      const addPianoCarry = (fiumeId: number, delta: number, data: Date) => {
+        if (!carryByFiumePiano.has(fiumeId)) carryByFiumePiano.set(fiumeId, []);
+        carryByFiumePiano.get(fiumeId)!.push({ delta, data });
+      };
 
       for (const e of eventi) {
         const eData = new Date(e.data);
@@ -1890,30 +1921,35 @@ export const appRouter = router({
           if (!capitaleByFiumePiano.has(e.fiumePianoId)) capitaleByFiumePiano.set(e.fiumePianoId, []);
           capitaleByFiumePiano.get(e.fiumePianoId)!.push({ importo: e.importo, data: eData });
         }
-        if (e.tipo === 'prelievo' && e.fiumeId) {
-          if (!prelieviByFiumeId.has(e.fiumeId)) prelieviByFiumeId.set(e.fiumeId, []);
-          prelieviByFiumeId.get(e.fiumeId)!.push({ importo: e.importo, data: eData });
+        if (e.fiumeId) {
+          if (e.tipo === 'rendita')        addPianoCarry(e.fiumeId, e.importo - (e.quotaNonReinvestita ?? 0), eData);
+          else if (e.tipo === 'apporto')   addPianoCarry(e.fiumeId, e.importo, eData);
+          else if (e.tipo === 'prelievo')  addPianoCarry(e.fiumeId, -e.importo, eData);
+          else if (e.tipo === 'reinvestimento') addPianoCarry(e.fiumeId, -e.importo, eData);
         }
-        if (e.affluenteId) {
+        if (e.tipo === 'reinvestimento' && e.fiumeDestinazioneId) {
+          addPianoCarry(e.fiumeDestinazioneId, e.importo, eData);
+        }
+        if (e.tipo === 'apporto' && e.affluenteId) {
           const c = byAffluente.get(e.affluenteId) ?? { nEventi: 0, totaleReale: 0 };
           byAffluente.set(e.affluenteId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
         }
-        if (e.reinvestimentoId) {
+        if (e.tipo === 'reinvestimento' && e.reinvestimentoId) {
           const c = byReinvest.get(e.reinvestimentoId) ?? { nEventi: 0, totaleReale: 0 };
           byReinvest.set(e.reinvestimentoId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
         }
       }
 
-      // Calcola reale per ogni fiume: ultima snapshot capitale - prelievi successivi
+      // Calcola reale per ogni fiume: ultima snapshot + carry-forward
       const byFiumePiano = new Map<number, { nEventi: number; totaleReale: number }>();
       for (const [fiumePianoId, capitaleEvts] of capitaleByFiumePiano.entries()) {
         const lastEvt = capitaleEvts.reduce((a, b) => a.data.getTime() > b.data.getTime() ? a : b);
-        const prelieviPost = (prelieviByFiumeId.get(fiumePianoId) ?? [])
-          .filter(p => p.data.getTime() > lastEvt.data.getTime());
-        const totalePrelievi = prelieviPost.reduce((s, p) => s + p.importo, 0);
+        const carryPost = (carryByFiumePiano.get(fiumePianoId) ?? [])
+          .filter(c => c.data.getTime() > lastEvt.data.getTime());
+        const deltaTotale = carryPost.reduce((s, c) => s + c.delta, 0);
         byFiumePiano.set(fiumePianoId, {
-          nEventi: capitaleEvts.length + prelieviPost.length,
-          totaleReale: lastEvt.importo - totalePrelievi,
+          nEventi: capitaleEvts.length + carryPost.length,
+          totaleReale: lastEvt.importo + deltaTotale,
         });
       }
 

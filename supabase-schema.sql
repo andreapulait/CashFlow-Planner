@@ -171,23 +171,24 @@ CREATE TABLE IF NOT EXISTS "eventiReali" (
   "userId"            INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "fiumeId"           INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
   -- FK Approach A: collegamento esplicito evento reale → voce del piano
-  "fiumePianoId"      INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
-  "affluenteId"       INTEGER REFERENCES "affluenti"("id") ON DELETE SET NULL,
-  "reinvestimentoId"  INTEGER REFERENCES "reinvestimenti"("id") ON DELETE SET NULL,
-  "tipo"              VARCHAR(20) NOT NULL,
-  "importo"           INTEGER NOT NULL,
-  "data"              TIMESTAMP NOT NULL,
-  "descrizione"       TEXT,
-  "createdAt"         TIMESTAMP NOT NULL DEFAULT NOW(),
-  "updatedAt"         TIMESTAMP NOT NULL DEFAULT NOW()
+  "fiumePianoId"        INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
+  "affluenteId"         INTEGER REFERENCES "affluenti"("id") ON DELETE SET NULL,
+  "reinvestimentoId"    INTEGER REFERENCES "reinvestimenti"("id") ON DELETE SET NULL,
+  "fiumeDestinazioneId" INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
+  "tipo"                VARCHAR(20) NOT NULL,
+  "importo"             INTEGER NOT NULL,
+  "quotaNonReinvestita" INTEGER,
+  "data"                TIMESTAMP NOT NULL,
+  "descrizione"         TEXT,
+  "createdAt"           TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updatedAt"           TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- ── Migrazione: aggiungi colonne FK Approach A a tabella eventiReali esistente ─
+-- ── Migrazione: aggiungi nuove colonne a eventiReali esistente ───────────────
 -- Eseguire UNA SOLA VOLTA su database già esistente:
--- ALTER TABLE "eventiReali"
---   ADD COLUMN IF NOT EXISTS "fiumePianoId"     INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
---   ADD COLUMN IF NOT EXISTS "affluenteId"      INTEGER REFERENCES "affluenti"("id") ON DELETE SET NULL,
---   ADD COLUMN IF NOT EXISTS "reinvestimentoId" INTEGER REFERENCES "reinvestimenti"("id") ON DELETE SET NULL;
+ALTER TABLE "eventiReali"
+  ADD COLUMN IF NOT EXISTS "fiumeDestinazioneId" INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS "quotaNonReinvestita"  INTEGER;
 
 -- ── Row-Level Security ───────────────────────────────────────────────────────
 -- Il backend usa connessione diretta PostgreSQL (service role) che bypassa RLS.

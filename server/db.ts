@@ -1434,8 +1434,10 @@ export async function createEventoReale(params: {
   fiumePianoId?: number | null;
   affluenteId?: number | null;
   reinvestimentoId?: number | null;
+  fiumeDestinazioneId?: number | null;
   tipo: string;
   importo: number;
+  quotaNonReinvestita?: number | null;
   data: Date;
   descrizione?: string | null;
 }) {
@@ -1446,11 +1448,13 @@ export async function createEventoReale(params: {
 export async function updateEventoReale(id: number, userId: number, params: {
   tipo?: string;
   importo?: number;
+  quotaNonReinvestita?: number | null;
   data?: Date;
   fiumeId?: number | null;
   fiumePianoId?: number | null;
   affluenteId?: number | null;
   reinvestimentoId?: number | null;
+  fiumeDestinazioneId?: number | null;
   descrizione?: string | null;
 }) {
   const result = await db.update(eventiReali)

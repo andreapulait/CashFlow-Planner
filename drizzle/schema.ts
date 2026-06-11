@@ -231,10 +231,14 @@ export const eventiReali = pgTable("eventiReali", {
   fiumePianoId: integer("fiumePianoId").references(() => fiumi.id, { onDelete: "set null" }),
   affluenteId: integer("affluenteId").references(() => affluenti.id, { onDelete: "set null" }),
   reinvestimentoId: integer("reinvestimentoId").references(() => reinvestimenti.id, { onDelete: "set null" }),
-  /** 'apporto' | 'rendita' | 'capitale' | 'prelievo' */
+  /** Fiume destinazione (solo tipo='reinvestimento') */
+  fiumeDestinazioneId: integer("fiumeDestinazioneId").references(() => fiumi.id, { onDelete: "set null" }),
+  /** 'apporto' | 'rendita' | 'capitale' | 'prelievo' | 'reinvestimento' */
   tipo: varchar("tipo", { length: 20 }).notNull(),
   /** Importo in centesimi */
   importo: integer("importo").notNull(),
+  /** Quota non reinvestita in centesimi (solo tipo='rendita') */
+  quotaNonReinvestita: integer("quotaNonReinvestita"),
   /** Data reale dell'evento */
   data: timestamp("data").notNull(),
   descrizione: text("descrizione"),
