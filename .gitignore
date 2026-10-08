@@ -108,3 +108,4 @@ temp/
 .project-config.json
 
 client_secret*.json
+.vercel/
