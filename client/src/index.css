@@ -180,3 +180,59 @@
 [data-radix-popper-content-wrapper] {
   z-index: 100 !important;
 }
+
+/* react-big-calendar: segue il tema (chiaro/scuro) dell'app */
+.rbc-calendar {
+  color: var(--foreground);
+}
+.rbc-calendar .rbc-month-view,
+.rbc-calendar .rbc-time-view,
+.rbc-calendar .rbc-agenda-view table.rbc-agenda-table,
+.rbc-calendar .rbc-header,
+.rbc-calendar .rbc-month-row,
+.rbc-calendar .rbc-day-bg,
+.rbc-calendar .rbc-agenda-view table.rbc-agenda-table tbody > tr > td,
+.rbc-calendar .rbc-agenda-view table.rbc-agenda-table thead > tr > th,
+.rbc-calendar .rbc-time-content,
+.rbc-calendar .rbc-time-header-content,
+.rbc-calendar .rbc-timeslot-group,
+.rbc-calendar .rbc-day-slot .rbc-time-slot {
+  border-color: var(--border);
+}
+.rbc-calendar .rbc-off-range-bg {
+  background: var(--muted);
+}
+.rbc-calendar .rbc-off-range {
+  color: var(--muted-foreground);
+}
+.rbc-calendar .rbc-today {
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+.rbc-calendar .rbc-date-cell.rbc-now > a,
+.rbc-calendar .rbc-date-cell.rbc-now {
+  font-weight: 700;
+  color: var(--primary);
+}
+.rbc-calendar .rbc-toolbar button {
+  color: var(--foreground);
+  border-color: var(--border);
+  background: transparent;
+}
+.rbc-calendar .rbc-toolbar button:hover,
+.rbc-calendar .rbc-toolbar button:focus {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.rbc-calendar .rbc-toolbar button.rbc-active,
+.rbc-calendar .rbc-toolbar button.rbc-active:hover {
+  background: var(--accent);
+  box-shadow: inset 0 3px 5px rgb(0 0 0 / 0.12);
+}
+.rbc-overlay {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.rbc-overlay-header {
+  border-color: var(--border);
+}
