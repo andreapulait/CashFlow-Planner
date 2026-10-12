@@ -15,6 +15,9 @@ async function runSimulazione(userId: number, orizzonteTemporale: number) {
   const reinvestimentiData = await db.getReinvestimentiByUserId(userId);
   const reinvestimentiPeriodici = await db.getReinvestimentiPeriodicByUserId(userId);
 
+  // Occorrenze dei reinvestimenti periodici (importo stimato in centesimi), per Calendario/Monitoraggio
+  const periodiciOccorrenze: Array<{ rpId: number; mese: number; importo: number }> = [];
+
   // Carica affluenti per ogni fiume
   const affluentiByFiume = new Map<number, Map<number, number>>();
   for (const fiume of allFiumi) {
@@ -136,6 +139,7 @@ async function runSimulazione(userId: number, orizzonteTemporale: number) {
       }
 
       importo = Math.min(importo, Math.max(0, capSrc));
+      periodiciOccorrenze.push({ rpId: rp.id, mese, importo: Math.round(importo * 100) });
       srcState.set(mese, capSrc - importo);
 
       if (rp.fiumeDestinazioneId) {
@@ -145,7 +149,7 @@ async function runSimulazione(userId: number, orizzonteTemporale: number) {
     }
   }
 
-  return { fiumiStates, fiumiRendite, fiumiInfo, allFiumi, affluentiByFiume, reinvestimentiByMese };
+  return { fiumiStates, fiumiRendite, fiumiInfo, allFiumi, affluentiByFiume, reinvestimentiByMese, periodiciOccorrenze };
 }
 
 // ─── Alert evaluation ─────────────────────────────────────────────────────────
@@ -1725,6 +1729,8 @@ export const appRouter = router({
         fiumePianoId: z.number().int().positive().optional(),
         affluenteId: z.number().int().positive().optional(),
         reinvestimentoId: z.number().int().positive().optional(),
+        reinvestimentoPeriodicoId: z.number().int().positive().optional(),
+        meseOccorrenza: z.number().int().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return db.createEventoReale({
@@ -1739,6 +1745,8 @@ export const appRouter = router({
           fiumePianoId: input.fiumePianoId ?? null,
           affluenteId: input.affluenteId ?? null,
           reinvestimentoId: input.reinvestimentoId ?? null,
+          reinvestimentoPeriodicoId: input.reinvestimentoPeriodicoId ?? null,
+          meseOccorrenza: input.meseOccorrenza ?? null,
         });
       }),
 
@@ -1755,6 +1763,8 @@ export const appRouter = router({
         fiumePianoId: z.number().int().positive().nullable().optional(),
         affluenteId: z.number().int().positive().nullable().optional(),
         reinvestimentoId: z.number().int().positive().nullable().optional(),
+        reinvestimentoPeriodicoId: z.number().int().positive().nullable().optional(),
+        meseOccorrenza: z.number().int().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...data } = input;
@@ -1919,6 +1929,8 @@ export const appRouter = router({
       const carryByFiumePiano = new Map<number, PianoCarry[]>();
       const byAffluente       = new Map<number, { nEventi: number; totaleReale: number }>();
       const byReinvest        = new Map<number, { nEventi: number; totaleReale: number }>();
+      // Reinvestimenti periodici: chiave "<regola>:<mese occorrenza>"
+      const byPeriodico       = new Map<string, { nEventi: number; totaleReale: number }>();
 
       const addPianoCarry = (fiumeId: number, delta: number, data: Date) => {
         if (!carryByFiumePiano.has(fiumeId)) carryByFiumePiano.set(fiumeId, []);
@@ -1943,6 +1955,11 @@ export const appRouter = router({
         if (e.tipo === 'apporto' && e.affluenteId) {
           const c = byAffluente.get(e.affluenteId) ?? { nEventi: 0, totaleReale: 0 };
           byAffluente.set(e.affluenteId, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
+        }
+        if (e.tipo === 'reinvestimento' && e.reinvestimentoPeriodicoId && e.meseOccorrenza != null) {
+          const k = `${e.reinvestimentoPeriodicoId}:${e.meseOccorrenza}`;
+          const c = byPeriodico.get(k) ?? { nEventi: 0, totaleReale: 0 };
+          byPeriodico.set(k, { nEventi: c.nEventi + 1, totaleReale: c.totaleReale + e.importo });
         }
         if (e.tipo === 'reinvestimento' && e.reinvestimentoId) {
           const c = byReinvest.get(e.reinvestimentoId) ?? { nEventi: 0, totaleReale: 0 };
@@ -1971,9 +1988,12 @@ export const appRouter = router({
         r => r.reinvestimento.percentuale && !r.reinvestimento.importoFisso
       );
       let simStates: Map<number, Map<number, number>> | null = null;
-      if (hasPct) {
+      let periodiciOcc: Array<{ rpId: number; mese: number; importo: number }> = [];
+      const periodiciRegole = await db.getReinvestimentiPeriodicByUserId(ctx.user.id);
+      if (hasPct || periodiciRegole.length > 0) {
         const sim = await runSimulazione(ctx.user.id, imp.orizzonteTemporale);
         simStates = sim.fiumiStates;
+        periodiciOcc = sim.periodiciOccorrenze;
       }
 
       const reinvPianificato = new Map<number, number>();
@@ -1994,6 +2014,11 @@ export const appRouter = router({
         // Solo le voci con eventi (le planned amounts di fiumi/affluenti sono già nel frontend)
         fiumi: Array.from(byFiumePiano.entries()).map(([fiumePianoId, d]) => ({ fiumePianoId, ...d })),
         affluenti: Array.from(byAffluente.entries()).map(([affluenteId, d]) => ({ affluenteId, ...d })),
+        // Occorrenze dei reinvestimenti periodici: importo stimato dalla simulazione + registrato
+        periodici: periodiciOcc.map(o => {
+          const d = byPeriodico.get(`${o.rpId}:${o.mese}`) ?? { nEventi: 0, totaleReale: 0 };
+          return { reinvestimentoPeriodicoId: o.rpId, mese: o.mese, pianificato: o.importo, ...d };
+        }),
         // Tutti i reinvestimenti (con o senza eventi) per il totale pianificato
         reinvestimenti: reinvestimentiData.map(rw => {
           const r = rw.reinvestimento;

@@ -232,6 +232,9 @@ export const eventiReali = pgTable("eventiReali", {
   fiumePianoId: integer("fiumePianoId").references(() => fiumi.id, { onDelete: "set null" }),
   affluenteId: integer("affluenteId").references(() => affluenti.id, { onDelete: "set null" }),
   reinvestimentoId: integer("reinvestimentoId").references(() => reinvestimenti.id, { onDelete: "set null" }),
+  /** Collegamento a una regola di reinvestimento periodico + mese (offset dal T0) dell'occorrenza */
+  reinvestimentoPeriodicoId: integer("reinvestimentoPeriodicoId").references(() => reinvestimentiPeriodici.id, { onDelete: "set null" }),
+  meseOccorrenza: integer("meseOccorrenza"),
   /** Fiume destinazione (solo tipo='reinvestimento') */
   fiumeDestinazioneId: integer("fiumeDestinazioneId").references(() => fiumi.id, { onDelete: "set null" }),
   /** 'apporto' | 'rendita' | 'capitale' | 'prelievo' | 'reinvestimento' */

@@ -47,6 +47,8 @@ type FormData = {
   fiumePianoId: number | undefined;
   affluenteId: number | undefined;
   reinvestimentoId: number | undefined;
+  reinvestimentoPeriodicoId: number | undefined;
+  meseOccorrenza: number | undefined;
 };
 
 const emptyForm = (): FormData => ({
@@ -60,6 +62,8 @@ const emptyForm = (): FormData => ({
   fiumePianoId: undefined,
   affluenteId: undefined,
   reinvestimentoId: undefined,
+  reinvestimentoPeriodicoId: undefined,
+  meseOccorrenza: undefined,
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -230,6 +234,7 @@ export default function Monitoraggio() {
     fiumi: true,
     affluenti: true,
     reinvestimenti: true,
+    periodici: false,
   });
 
   const utils = trpc.useUtils();
@@ -245,6 +250,7 @@ export default function Monitoraggio() {
   const { data: fiumi = [] } = trpc.fiumi.list.useQuery();
   const { data: allAffluenti = [] } = trpc.affluenti.listAll.useQuery();
   const { data: reinvestimentiData = [] } = trpc.reinvestimenti.list.useQuery();
+  const { data: periodiciRegole = [] } = trpc.reinvestimentiPeriodici.list.useQuery();
   const { data: impostazioni } = trpc.impostazioni.get.useQuery();
 
   const createMutation = trpc.monitoraggio.create.useMutation({
@@ -289,6 +295,8 @@ export default function Monitoraggio() {
       fiumePianoId: e.fiumePianoId ?? undefined,
       affluenteId: e.affluenteId ?? undefined,
       reinvestimentoId: e.reinvestimentoId ?? undefined,
+      reinvestimentoPeriodicoId: e.reinvestimentoPeriodicoId ?? undefined,
+      meseOccorrenza: e.meseOccorrenza ?? undefined,
     });
     setFormLinkLabel(null);
     setDialogOpen(true);
@@ -329,6 +337,8 @@ export default function Monitoraggio() {
       fiumePianoId: form.fiumePianoId,
       affluenteId: form.affluenteId,
       reinvestimentoId: form.reinvestimentoId,
+      reinvestimentoPeriodicoId: form.reinvestimentoPeriodicoId,
+      meseOccorrenza: form.meseOccorrenza,
     };
     if (editingId) updateMutation.mutate({ id: editingId, ...payload });
     else createMutation.mutate(payload);
@@ -398,7 +408,7 @@ export default function Monitoraggio() {
     })
     .sort((a: AffItem, b: AffItem) => a.dataCalcolata.getTime() - b.dataCalcolata.getTime());
 
-  type ReinvItem = { id: number; mese: number; dataCalcolata: Date; fiumeOrigineNome: string; fiumeOrigineId: number; fiumeDestinazioneNome: string | null; importoFisso: number | null; percentuale: number | null; descrizione: string | null };
+  type ReinvItem = { id: number; mese: number; dataCalcolata: Date; fiumeOrigineNome: string; fiumeOrigineId: number; fiumeDestinazioneId: number | null; fiumeDestinazioneNome: string | null; importoFisso: number | null; percentuale: number | null; descrizione: string | null };
   const reinvestimentiPiano: ReinvItem[] = (reinvestimentiData as any[])
     .map((r: any) => {
       const reinv = r.reinvestimento ?? r;
@@ -410,6 +420,7 @@ export default function Monitoraggio() {
         dataCalcolata: data,
         fiumeOrigineNome: r.fiumeOrigineNome ?? "—",
         fiumeOrigineId: reinv.fiumeOrigineId,
+        fiumeDestinazioneId: reinv.fiumeDestinazioneId ?? null,
         fiumeDestinazioneNome: r.fiumeDestinazioneNome ?? reinv.nuovoFiumeNome ?? null,
         importoFisso: reinv.importoFisso ?? null,
         percentuale: reinv.percentuale ?? null,
@@ -449,6 +460,33 @@ export default function Monitoraggio() {
     pianificato: (confrontoPiano?.reinvestimenti ?? []).reduce((s, x) => s + x.pianificato, 0),
     reale: (confrontoPiano?.reinvestimenti ?? []).reduce((s, x) => s + x.totaleReale, 0),
     nEventi: (confrontoPiano?.reinvestimenti ?? []).reduce((s, x) => s + x.nEventi, 0),
+  };
+
+  // ─── Reinvestimenti periodici: una riga per occorrenza, raggruppate per regola ─
+
+  const cfmPeriodici = new Map(
+    (confrontoPiano?.periodici ?? []).map(x => [`${x.reinvestimentoPeriodicoId}:${x.mese}`, x])
+  );
+  const periodiciGruppi = (periodiciRegole as any[]).map(row => {
+    const rp = row.rp;
+    const occorrenze: Array<{ mese: number; data: Date; pianificato: number; cfm: { nEventi: number; totaleReale: number } | null }> = [];
+    for (let mese = rp.meseInizio; mese <= rp.meseFine; mese += rp.periodicita) {
+      const c = cfmPeriodici.get(`${rp.id}:${mese}`);
+      occorrenze.push({
+        mese,
+        data: monthOffsetToDate(dataInizio, mese),
+        pianificato: c?.pianificato ?? 0,
+        cfm: c ? { nEventi: c.nEventi, totaleReale: c.totaleReale } : null,
+      });
+    }
+    return { rp, origine: row.fiumeOrigineName ?? "—", destinazione: row.fiumeDestinazioneName ?? "—", occorrenze };
+  });
+  const tutteOccorrenze = periodiciGruppi.flatMap(g => g.occorrenze);
+  const aggregatoPeriodici = {
+    count: tutteOccorrenze.length,
+    pianificato: tutteOccorrenze.reduce((s, o) => s + o.pianificato, 0),
+    reale: tutteOccorrenze.reduce((s, o) => s + (o.cfm?.totaleReale ?? 0), 0),
+    nEventi: tutteOccorrenze.reduce((s, o) => s + (o.cfm?.nEventi ?? 0), 0),
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -771,6 +809,56 @@ export default function Monitoraggio() {
                   descrizione: r.descrizione ?? "",
                 }, `Collegato a: Reinvestimento "${r.fiumeOrigineNome}${dest}" (${importoLabel})`)}
               />
+            );
+          })}
+        </PianoSection>
+
+        {/* ── Reinvestimenti periodici ── */}
+        <PianoSection
+          id="periodici"
+          open={pianoOpen.periodici}
+          onOpenChange={v => setPianoOpen(p => ({ ...p, periodici: v }))}
+          icon={<ArrowRightLeft className="h-4 w-4" />}
+          title="Reinvestimenti periodici"
+          color="text-violet-600"
+          aggregato={aggregatoPeriodici}
+        >
+          {periodiciGruppi.map(g => {
+            const rp = g.rp;
+            const freq = rp.periodicita === 1 ? "ogni mese" : `ogni ${rp.periodicita} mesi`;
+            const base = rp.tipoCalcolo === "rendita" ? "della rendita" : "del capitale";
+            return (
+              <div key={rp.id}>
+                <div className="px-4 py-2 bg-muted/30 text-xs font-medium">
+                  {g.origine} → {g.destinazione}
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {(rp.percentuale / 100).toFixed(1)}% {base} · {freq} · {g.occorrenze.length} occorrenze
+                  </span>
+                </div>
+                <div className="divide-y">
+                  {g.occorrenze.map(o => (
+                    <PianoRow
+                      key={`${rp.id}-${o.mese}`}
+                      data={formatDate(o.data)}
+                      label={`${g.origine} → ${g.destinazione}`}
+                      sub={rp.descrizione ?? null}
+                      badge="Periodico"
+                      pianificato={o.pianificato}
+                      confrontoData={o.cfm}
+                      onRegistra={() => openCreatePreFilled({
+                        tipo: "reinvestimento",
+                        fiumeId: rp.fiumeOrigineId,
+                        fiumeDestinazioneId: rp.fiumeDestinazioneId ?? undefined,
+                        reinvestimentoPeriodicoId: rp.id,
+                        meseOccorrenza: o.mese,
+                        importoEuro: o.pianificato ? (o.pianificato / 100).toString() : "",
+                        data: o.data.toISOString().slice(0, 10),
+                        descrizione: rp.descrizione ?? "",
+                      }, `Collegato a: Reinvestimento periodico "${g.origine} → ${g.destinazione}" (${formatDate(o.data)})`)}
+                    />
+                  ))}
+                </div>
+              </div>
             );
           })}
         </PianoSection>

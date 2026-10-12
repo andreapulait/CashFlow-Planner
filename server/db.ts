@@ -1445,6 +1445,8 @@ export async function createEventoReale(params: {
   fiumePianoId?: number | null;
   affluenteId?: number | null;
   reinvestimentoId?: number | null;
+  reinvestimentoPeriodicoId?: number | null;
+  meseOccorrenza?: number | null;
   fiumeDestinazioneId?: number | null;
   tipo: string;
   importo: number;
@@ -1465,6 +1467,8 @@ export async function updateEventoReale(id: number, userId: number, params: {
   fiumePianoId?: number | null;
   affluenteId?: number | null;
   reinvestimentoId?: number | null;
+  reinvestimentoPeriodicoId?: number | null;
+  meseOccorrenza?: number | null;
   fiumeDestinazioneId?: number | null;
   descrizione?: string | null;
 }) {

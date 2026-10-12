@@ -32,8 +32,7 @@ const localizer = dateFnsLocalizer({
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
 
 type EventTipo = "fiume_attivazione" | "reinvestimento_puntuale" | "reinvestimento_periodico" | "affluente";
-/** "n/d": i reinvestimenti periodici non hanno un collegamento con gli eventi reali */
-type EventStato = "registrato" | "scaduto" | "programmato" | "n/d";
+type EventStato = "registrato" | "scaduto" | "programmato";
 
 interface Registrazione { n: number; totale: number }
 
@@ -45,7 +44,8 @@ interface CalendarEvent {
   resource: {
     tipo: EventTipo;
     stato: EventStato;
-    refId?: number;          // id della voce di piano (fiume / affluente / reinvestimento)
+    refId?: number;          // id della voce di piano (fiume / affluente / reinvestimento / regola periodica)
+    meseOccorrenza?: number; // solo periodici: offset mese dal T0 dell'occorrenza
     fiumeId?: number;        // fiume coinvolto (origine per i reinvestimenti)
     fiumeDestinazioneId?: number;
     fiumeOrigine?: string;
@@ -108,7 +108,6 @@ const statoLabel: Record<EventStato, string> = {
   registrato:  "Registrato",
   scaduto:     "Da registrare (scaduto)",
   programmato: "In programma",
-  "n/d":       "Periodico",
 };
 
 function StatoBadge({ stato }: { stato: EventStato }) {
@@ -178,16 +177,19 @@ export default function Calendario() {
     const aff = new Map<number, Registrazione>();
     const reinv = new Map<number, Registrazione>();
     const fiume = new Map<number, Registrazione>();
-    const add = (m: Map<number, Registrazione>, id: number, importo: number) => {
+    const periodico = new Map<string, Registrazione>();
+    const addK = (m: Map<number | string, Registrazione>, id: number | string, importo: number) => {
       const c = m.get(id) ?? { n: 0, totale: 0 };
       m.set(id, { n: c.n + 1, totale: c.totale + importo });
     };
     (eventiReali ?? []).forEach((e: any) => {
-      if (e.tipo === "apporto" && e.affluenteId) add(aff, e.affluenteId, e.importo);
-      if (e.tipo === "reinvestimento" && e.reinvestimentoId) add(reinv, e.reinvestimentoId, e.importo);
-      if (e.tipo === "capitale" && e.fiumePianoId) add(fiume, e.fiumePianoId, e.importo);
+      if (e.tipo === "apporto" && e.affluenteId) addK(aff, e.affluenteId, e.importo);
+      if (e.tipo === "reinvestimento" && e.reinvestimentoId) addK(reinv, e.reinvestimentoId, e.importo);
+      if (e.tipo === "capitale" && e.fiumePianoId) addK(fiume, e.fiumePianoId, e.importo);
+      if (e.tipo === "reinvestimento" && e.reinvestimentoPeriodicoId && e.meseOccorrenza != null)
+        addK(periodico, `${e.reinvestimentoPeriodicoId}:${e.meseOccorrenza}`, e.importo);
     });
-    return { aff, reinv, fiume };
+    return { aff, reinv, fiume, periodico };
   }, [eventiReali]);
 
   const events: CalendarEvent[] = useMemo(() => {
@@ -266,6 +268,7 @@ export default function Calendario() {
 
         for (let mese = rp.meseInizio; mese <= rp.meseFine; mese += rp.periodicita) {
           const eventDate = norm(meseToDate(mese));
+          const reg = registrati.periodico.get(`${rp.id}:${mese}`);
           list.push({
             id: `reinv-periodico-${rp.id}-${mese}`,
             title: `↻ ${origineNome ?? "?"} → ${destinazioneNome ?? "?"}`,
@@ -273,7 +276,10 @@ export default function Calendario() {
             end: eventDate,
             resource: {
               tipo: "reinvestimento_periodico",
-              stato: "n/d",
+              stato: statoDi(eventDate, reg),
+              refId: rp.id,
+              meseOccorrenza: mese,
+              registrazione: reg,
               fiumeId: rp.fiumeOrigineId ?? undefined,
               fiumeDestinazioneId: rp.fiumeDestinazioneId ?? undefined,
               fiumeOrigine: origineNome ?? undefined,
@@ -379,7 +385,7 @@ export default function Calendario() {
   const oggiInizio = startOfDay(new Date());
   const tra30giorni = addDays(oggiInizio, 30);
 
-  const conStato = events.filter(e => e.resource.stato !== "n/d");
+  const conStato = events;
   const nRegistrati = conStato.filter(e => e.resource.stato === "registrato").length;
   const nScaduti = conStato.filter(e => e.resource.stato === "scaduto").length;
   const nProssimi30 = events.filter(e => e.resource.stato === "programmato" && e.start <= tra30giorni).length;
@@ -410,6 +416,11 @@ export default function Calendario() {
     if (r.tipo === "reinvestimento_puntuale" && r.refId) {
       return confrontoPiano?.reinvestimenti.find(x => x.reinvestimentoId === r.refId)?.pianificato ?? 0;
     }
+    if (r.tipo === "reinvestimento_periodico" && r.refId != null && r.meseOccorrenza != null) {
+      return confrontoPiano?.periodici.find(
+        x => x.reinvestimentoPeriodicoId === r.refId && x.mese === r.meseOccorrenza
+      )?.pianificato ?? 0;
+    }
     return 0;
   };
 
@@ -420,8 +431,7 @@ export default function Calendario() {
     setSelectedEvent(ev);
   };
 
-  const puoRegistrare = (ev: CalendarEvent) =>
-    ev.resource.tipo !== "reinvestimento_periodico" && ev.resource.refId != null;
+  const puoRegistrare = (ev: CalendarEvent) => ev.resource.refId != null;
 
   const registra = () => {
     const ev = selectedEvent;
@@ -447,6 +457,13 @@ export default function Calendario() {
       createMutation.mutate({
         ...base, tipo: "reinvestimento", fiumeId: r.fiumeId,
         fiumeDestinazioneId: r.fiumeDestinazioneId, reinvestimentoId: r.refId,
+        descrizione: r.descrizione,
+      });
+    } else if (r.tipo === "reinvestimento_periodico") {
+      createMutation.mutate({
+        ...base, tipo: "reinvestimento", fiumeId: r.fiumeId,
+        fiumeDestinazioneId: r.fiumeDestinazioneId,
+        reinvestimentoPeriodicoId: r.refId, meseOccorrenza: r.meseOccorrenza,
         descrizione: r.descrizione,
       });
     } else if (r.tipo === "fiume_attivazione") {
@@ -530,14 +547,14 @@ export default function Calendario() {
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-emerald-600">Registrati</CardTitle></CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-emerald-600">{nRegistrati} <span className="text-base font-normal text-muted-foreground">/ {conStato.length}</span></div>
-              <p className="text-xs text-muted-foreground">{percRegistrati}% delle voci tracciabili</p>
+              <p className="text-xs text-muted-foreground">{percRegistrati}% del piano</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Totale eventi</CardTitle></CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{events.length}</div>
-              <p className="text-xs text-muted-foreground">nel piano completo (periodici inclusi)</p>
+              <p className="text-xs text-muted-foreground">nel piano completo</p>
             </CardContent>
           </Card>
         </div>
@@ -578,7 +595,6 @@ export default function Calendario() {
                     <SelectItem value="programmato">In programma</SelectItem>
                     <SelectItem value="scaduto">Scaduti</SelectItem>
                     <SelectItem value="registrato">Registrati</SelectItem>
-                    <SelectItem value="n/d">Periodici</SelectItem>
                   </SelectContent>
                 </Select>
                 {filtriAttivi && (
@@ -726,9 +742,7 @@ export default function Calendario() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Stato</span>
-                {sel.resource.stato === "n/d"
-                  ? <span className="text-xs text-muted-foreground">{statoLabel["n/d"]}</span>
-                  : <StatoBadge stato={sel.resource.stato} />}
+                <StatoBadge stato={sel.resource.stato} />
               </div>
 
               <div className="flex justify-between">

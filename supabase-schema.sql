@@ -192,6 +192,11 @@ ALTER TABLE "eventiReali"
   ADD COLUMN IF NOT EXISTS "fiumeDestinazioneId" INTEGER REFERENCES "fiumi"("id") ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS "quotaNonReinvestita"  INTEGER;
 
+-- ── Migrazione: collegamento eventi reali → reinvestimenti periodici ─────────
+ALTER TABLE "eventiReali"
+  ADD COLUMN IF NOT EXISTS "reinvestimentoPeriodicoId" INTEGER REFERENCES "reinvestimentiPeriodici"("id") ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS "meseOccorrenza" INTEGER;
+
 -- ── Row-Level Security ───────────────────────────────────────────────────────
 -- Il backend usa connessione diretta PostgreSQL (service role) che bypassa RLS.
 -- RLS blocca solo l'API REST pubblica di Supabase (PostgREST / anon key).
