@@ -1147,54 +1147,22 @@ export const appRouter = router({
       };
     }),
     
-    // Performance per ogni fiume (per Analytics)
+    // Performance per ogni fiume (per Analytics).
+    // Usa la stessa simulazione di riepilogo/Dashboard: considera percentualeReinvestimento,
+    // reinvestimenti puntuali e periodici. La somma dei valoriFinali coincide con capitaleTotale.
+    // ROI = (valore finale - capitale iniziale) / capitale iniziale, come il KPI "ROI Totale".
+    // I capitali trasferiti con i reinvestimenti restano nel fiume in cui si trovano.
     fiumiPerformance: protectedProcedure.query(async ({ ctx }) => {
-      const allFiumi = await db.getFiumiByUserId(ctx.user.id);
       const impostazioni = await db.getImpostazioniByUserId(ctx.user.id);
       const orizzonteTemporale = impostazioni.orizzonteTemporale;
-      
-      const performances = await Promise.all(allFiumi.map(async fiume => {
+      const { fiumiStates, fiumiRendite, allFiumi } = await runSimulazione(ctx.user.id, orizzonteTemporale);
+
+      const performances = allFiumi.map(fiume => {
+        const capitaleFinale = fiumiStates.get(fiume.id)?.get(orizzonteTemporale) || 0;   // euro
+        const renditaFinale = fiumiRendite.get(fiume.id)?.get(orizzonteTemporale) || 0;   // euro
         const sorgenteEuro = fiume.sorgente / 100;
-        const rendimentoAnnualeDecimale = fiume.rendimento / 10000;
-        const rendimentoMensileDecimale = Math.pow(1 + rendimentoAnnualeDecimale, 1/12) - 1;
-        const meseInizio = fiume.meseCreazione;
-        
-        let capitaleFinale = 0;
-        let renditaFinale = 0;
-        
-        if (orizzonteTemporale >= meseInizio) {
-          const affluenti = await db.getAffluentiByFiumeId(fiume.id);
-          const affluentiMap = new Map<number, number>();
-          affluenti.forEach(a => {
-            const existing = affluentiMap.get(a.mese) || 0;
-            affluentiMap.set(a.mese, existing + (a.importo / 100));
-          });
-          
-          let capitaleAccumulato = 0;
-          
-          for (let mese = 0; mese <= orizzonteTemporale; mese++) {
-            if (mese === meseInizio) {
-              capitaleAccumulato += sorgenteEuro;
-            }
-            
-            if (mese >= meseInizio) {
-              const affluenteMese = affluentiMap.get(mese) || 0;
-              capitaleAccumulato += affluenteMese;
-              
-              const rendita = capitaleAccumulato * rendimentoMensileDecimale;
-              capitaleAccumulato += rendita;
-              
-              if (mese === orizzonteTemporale) {
-                renditaFinale = rendita;
-              }
-            }
-          }
-          
-          capitaleFinale = capitaleAccumulato;
-        }
-        
         const roi = sorgenteEuro > 0 ? ((capitaleFinale - sorgenteEuro) / sorgenteEuro) * 100 : 0;
-        
+
         return {
           fiumeId: fiume.id,
           nome: fiume.nome,
@@ -1204,8 +1172,8 @@ export const appRouter = router({
           roi: Math.round(roi * 100) / 100,
           renditaMensile: Math.round(renditaFinale * 100), // euro → centesimi
         };
-      }));
-      
+      });
+
       return performances.sort((a, b) => b.roi - a.roi);
     }),
     
